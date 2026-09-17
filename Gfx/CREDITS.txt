@@ -1,0 +1,9 @@
+CSPSP graphics
+
+In-game players, weapons, muzzle and tiles from kevinbchen/cspsp
+https://github.com/kevinbchen/cspsp
+
+Menus and zombies: Kenney.nl Top-down Shooter pack (CC0)
+https://kenney.nl/assets/top-down-shooter
+
+Font: Google Fonts Press Start 2P (OFL)
