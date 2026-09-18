@@ -128,7 +128,17 @@ void Assets::registerCspsp() {
             addSprite(name, "muzzleflash.png", i * 32, 0, 32, 32);
         }
     }
+    // Original CSPSP particle sheet + scorch decal (GameStateLoading.cpp).
+    if (ensureTexture("particles.png")) {
+        addSprite("cs_explosion", "particles.png", 32, 0, 32, 32);
+        addSprite("cs_flash", "particles.png", 64, 64, 32, 32);
+        addSprite("cs_smoke", "particles.png", 0, 96, 32, 32);
+    }
+    if (ensureTexture("decals.png")) {
+        addSprite("cs_scorch", "decals.png", 0, 0, 32, 32);
+    }
     if (ensureTexture("cspsp_tiles.png")) {
+        addSprite("cs_nuclear", "cspsp_tiles.png", 2 * 32, 3 * 32, 32, 32);
         static const char* kThemes[] = {"dust", "office", "inferno", "nuke", "vertigo",
                                         "cache", "aztec", "italy", "mill", "warehouse"};
         static const char* kSlots[] = {"floor", "wall", "alt", "crate", "barrel", "cover", "tree", "door"};
@@ -218,15 +228,26 @@ void Assets::drawFit(SDL_Renderer* r, const std::string& name, int x, int y, int
 
 void Assets::drawCentered(SDL_Renderer* r, const std::string& name, float cx, float cy, float angleDeg,
                           float scale) const {
+    drawFx(r, name, cx, cy, angleDeg, scale, 255, {255, 255, 255, 255}, false);
+}
+
+void Assets::drawFx(SDL_Renderer* r, const std::string& name, float cx, float cy, float angleDeg, float scale,
+                    int alpha, SDL_Color tint, bool additive) const {
     const Sprite* s = get(name);
-    if (!s || !s->tex) {
+    if (!s || !s->tex || alpha <= 0 || scale <= 0.02f) {
         return;
     }
-    const int dw = static_cast<int>(s->src.w * scale);
-    const int dh = static_cast<int>(s->src.h * scale);
+    const int dw = std::max(1, static_cast<int>(s->src.w * scale));
+    const int dh = std::max(1, static_cast<int>(s->src.h * scale));
     SDL_Rect dst{static_cast<int>(cx) - dw / 2, static_cast<int>(cy) - dh / 2, dw, dh};
     SDL_Point center{dw / 2, dh / 2};
+    SDL_SetTextureBlendMode(s->tex, additive ? SDL_BLENDMODE_ADD : SDL_BLENDMODE_BLEND);
+    SDL_SetTextureColorMod(s->tex, tint.r, tint.g, tint.b);
+    SDL_SetTextureAlphaMod(s->tex, static_cast<Uint8>(alpha > 255 ? 255 : alpha));
     SDL_RenderCopyEx(r, s->tex, &s->src, &dst, angleDeg, &center, SDL_FLIP_NONE);
+    SDL_SetTextureBlendMode(s->tex, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureColorMod(s->tex, 255, 255, 255);
+    SDL_SetTextureAlphaMod(s->tex, 255);
 }
 
 void Assets::drawHotspot(SDL_Renderer* r, const std::string& name, float x, float y, float angleDeg, float scale,

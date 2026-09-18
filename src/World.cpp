@@ -36,13 +36,40 @@ Team fillTeam(GameMode mode, int teamCount, Team localTeam, int i) {
 constexpr float kRadarPing = 3.2f;
 constexpr float kBaseHitR = 22.0f;
 constexpr int kBaseMaxHp = 6000;
+constexpr int kNukeHits = 4;
 
 SDL_Color teamColor(Team t) {
     static const SDL_Color kCols[kMaxTeams] = {
-        {230, 140, 40, 255}, {70, 140, 230, 255}, {70, 200, 90, 255},
-        {200, 90, 210, 255}, {240, 210, 60, 255}, {50, 210, 210, 255}
+        {230, 140, 40, 255}, {70, 140, 230, 255}, {210, 70, 90, 255},
+        {200, 90, 210, 255}, {200, 200, 210, 255}, {50, 210, 210, 255}
     };
     return kCols[teamIndex(t)];
+}
+
+SDL_Color baseHudColor(Team t, Team localTeam) {
+    if (t == localTeam) {
+        return {255, 220, 70, 255};
+    }
+    return teamColor(t);
+}
+
+float frand(float a, float b) {
+    return a + (b - a) * (static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX));
+}
+
+void drawSkull(SDL_Renderer* r, int x, int y, SDL_Color c) {
+    SDL_SetRenderDrawColor(r, c.r, c.g, c.b, c.a);
+    SDL_Rect cr{x, y, 8, 7};
+    SDL_RenderFillRect(r, &cr);
+    SDL_Rect jaw{x + 2, y + 6, 4, 2};
+    SDL_RenderFillRect(r, &jaw);
+    SDL_SetRenderDrawColor(r, 20, 16, 16, 255);
+    SDL_Rect e1{x + 1, y + 2, 2, 2};
+    SDL_Rect e2{x + 5, y + 2, 2, 2};
+    SDL_RenderFillRect(r, &e1);
+    SDL_RenderFillRect(r, &e2);
+    SDL_Rect nose{x + 3, y + 4, 2, 2};
+    SDL_RenderFillRect(r, &nose);
 }
 
 int irand(int n) { return n <= 0 ? 0 : std::rand() % n; }
@@ -246,20 +273,53 @@ void drawBulletTracer(SDL_Renderer* r, const Camera& cam, const Bullet& b) {
     SDL_RenderFillRect(r, &pix);
 }
 
-void spawnParticle(std::vector<Particle>& ps, Vec2 pos, Vec2 vel, SDL_Color c, float life, float size) {
+Particle* takeParticle(std::vector<Particle>& ps) {
     for (auto& p : ps) {
         if (!p.active) {
-            p.active = true;
-            p.pos = pos;
-            p.vel = vel;
-            p.color = c;
-            p.life = life;
-            p.maxLife = life;
-            p.size = size;
-            return;
+            return &p;
         }
     }
-    ps.push_back({true, pos, vel, life, life, c, size});
+    return ps.empty() ? nullptr : &ps[0];
+}
+
+void spawnParticle(std::vector<Particle>& ps, Vec2 pos, Vec2 vel, SDL_Color c, float life, float size) {
+    Particle* p = takeParticle(ps);
+    if (!p) {
+        return;
+    }
+    p->active = true;
+    p->pos = pos;
+    p->vel = vel;
+    p->color = c;
+    p->colorEnd = c;
+    p->colorEnd.a = 0;
+    p->life = life;
+    p->maxLife = life;
+    p->size = size;
+    p->sizeEnd = size;
+    p->sprite = -1;
+    p->angle = 0.0f;
+    p->spin = 0.0f;
+}
+
+void spawnFxParticle(std::vector<Particle>& ps, Vec2 pos, Vec2 vel, int sprite, float life, float size,
+                     float sizeEnd, SDL_Color start, SDL_Color end, float spin) {
+    Particle* p = takeParticle(ps);
+    if (!p) {
+        return;
+    }
+    p->active = true;
+    p->pos = pos;
+    p->vel = vel;
+    p->color = start;
+    p->colorEnd = end;
+    p->life = life;
+    p->maxLife = life;
+    p->size = size;
+    p->sizeEnd = sizeEnd;
+    p->sprite = sprite;
+    p->angle = frand(0.0f, 360.0f);
+    p->spin = spin;
 }
 } // namespace
 
@@ -555,8 +615,10 @@ void World::startMatch(Team localTeam, int botCount, int localId, Difficulty dif
     wavePause_ = 0.0f;
     matchOver_ = false;
     winnerId_ = -1;
+    banner_[0] = 0;
+    bannerT_ = 0.0f;
     bullets_.assign(64, Bullet{});
-    particles_.assign(160, Particle{});
+    particles_.assign(400, Particle{});
     loot_.assign(24, Loot{});
     blasts_.assign(8, BlastFx{});
     smokes_.assign(6, SmokeCloud{});
@@ -565,6 +627,7 @@ void World::startMatch(Team localTeam, int botCount, int localId, Difficulty dif
         a.active = false;
     }
     setupBases();
+    scanNukes();
     if (mode_ == GameMode::Zombie) {
         localTeam = Team::Counter;
     }
@@ -1497,7 +1560,15 @@ void World::hurtBase(Team victim, float dmg, int owner) {
         return;
     }
     b.hp = 0;
-    (void)owner;
+    b.active = false;
+    const char* letter = teamLetter(b.team);
+    if (owner >= 0 && owner < kMaxPlayers && actors_[owner].active) {
+        std::snprintf(banner_, sizeof(banner_), "BASE %s DESTROYED BY TEAM %s", letter,
+                      teamLetter(actors_[owner].team));
+    } else {
+        std::snprintf(banner_, sizeof(banner_), "BASE %s DESTROYED", letter);
+    }
+    bannerT_ = 4.5f;
 }
 
 bool World::hitBases(Vec2 pos, float dmg, int owner, Team ownerTeam) {
@@ -1514,6 +1585,97 @@ bool World::hitBases(Vec2 pos, float dmg, int owner, Team ownerTeam) {
         }
     }
     return false;
+}
+
+void World::scanNukes() {
+    nukes_.clear();
+    for (int y = 0; y < map_.height(); ++y) {
+        for (int x = 0; x < map_.width(); ++x) {
+            if (map_.at(x, y) == Tile::Nuclear) {
+                NukeBlock n;
+                n.active = true;
+                n.tx = x;
+                n.ty = y;
+                n.hp = kNukeHits;
+                nukes_.push_back(n);
+            }
+        }
+    }
+}
+
+void World::hitNuclear(int tx, int ty, int owner, Camera* cam) {
+    for (auto& n : nukes_) {
+        if (!n.active || n.tx != tx || n.ty != ty) {
+            continue;
+        }
+        n.hp -= 1;
+        const Vec2 pos{tx * kTile + kTile * 0.5f, ty * kTile + kTile * 0.5f};
+        emitBurst(pos, 6, 50.0f, {255, 220, 40, 255}, 0.18f, 4.0f);
+        if (n.hp <= 0) {
+            explodeNuclear(n, owner, cam);
+        }
+        return;
+    }
+}
+
+void World::explodeNuclear(NukeBlock& n, int owner, Camera* cam) {
+    n.active = false;
+    n.hp = 0;
+    map_.set(n.tx, n.ty, Tile::Floor);
+    freeMinimap();
+    const Vec2 pos{n.tx * kTile + kTile * 0.5f, n.ty * kTile + kTile * 0.5f};
+    emitNadeParticles(pos, 1);
+    Scorch* sc = nullptr;
+    for (auto& s : scorches_) {
+        if (!s.active) {
+            sc = &s;
+            break;
+        }
+    }
+    if (!sc && !scorches_.empty()) {
+        sc = &scorches_[0];
+    }
+    if (sc) {
+        sc->active = true;
+        sc->pos = pos;
+        sc->life = 8.0f;
+    }
+    if (cam) {
+        const Vec2 c = cam->pos + Vec2{cam->viewW() * 0.5f, cam->viewH() * 0.5f};
+        float dist2 = (c - pos).length2();
+        if (dist2 < 1000.0f) {
+            dist2 = 1000.0f;
+        }
+        cam->shake(80000.0f / dist2, 0.45f);
+    }
+    constexpr float dmgBase = 90.0f;
+    for (auto& a : actors_) {
+        if (!a.active || !a.alive) {
+            continue;
+        }
+        if (map_.lineBlocked(pos, a.pos)) {
+            continue;
+        }
+        float distance = (pos - a.pos).length();
+        if (distance < 40.0f) {
+            distance = 40.0f;
+        } else if (distance > 180.0f) {
+            continue;
+        }
+        float dmg = (40.0f / distance) * dmgBase;
+        if (a.id == localId_) {
+            dmg *= tune(difficulty_).incomingMul;
+        }
+        a.hp -= static_cast<int>(dmg);
+        spawnParticle(particles_, a.pos, {}, {180, 30, 30, 255}, 0.28f, 4.0f);
+        if (a.hp <= 0) {
+            const int victim = a.id;
+            killActor(a);
+            if (owner >= 0 && owner != victim && owner < kMaxPlayers && actors_[owner].active) {
+                actors_[owner].kills++;
+            }
+        }
+    }
 }
 
 void World::packSnapshot(NetSnapshot& snap) const {
@@ -1968,6 +2130,31 @@ void World::emitBurst(Vec2 pos, int n, float speed, SDL_Color c, float life, flo
     }
 }
 
+void World::emitNadeParticles(Vec2 pos, int kind) {
+    // Counts / colors / sizes from original explosion.psi, flash.psi, smoke.psi.
+    if (kind == 0) {
+        const int n = 18;
+        for (int i = 0; i < n; ++i) {
+            const float ang = frand(0.0f, kPi * 2.0f);
+            const float spd = frand(0.64f, 1.90f) * 100.0f;
+            const float life = frand(0.06f, 0.20f);
+            spawnFxParticle(particles_, pos + Vec2{frand(-2.0f, 2.0f), frand(-2.0f, 2.0f)},
+                            {std::cos(ang) * spd, std::sin(ang) * spd}, 1, life, 0.92f, 3.12f,
+                            {255, 255, 255, 250}, {255, 255, 255, 0}, -45.0f);
+        }
+    } else if (kind == 1) {
+        const int n = 64;
+        for (int i = 0; i < n; ++i) {
+            const float ang = frand(0.0f, kPi * 2.0f);
+            const float spd = frand(3.97f, 7.46f) * 100.0f;
+            const float life = frand(0.16f, 0.44f);
+            spawnFxParticle(particles_, pos + Vec2{frand(-2.0f, 2.0f), frand(-2.0f, 2.0f)},
+                            {std::cos(ang) * spd, std::sin(ang) * spd}, 0, life, 3.12f, 0.52f,
+                            {255, 20, 0, 255}, {255, 142, 0, 42}, frand(-12.0f, 12.0f));
+        }
+    }
+}
+
 void World::receiveFlash(Actor& a, float intensity) {
     if (!a.alive) {
         return;
@@ -2047,13 +2234,19 @@ void World::explodeGrenade(Bullet& nade, Camera* cam) {
     }
 
     if (nade.weapon == WeaponId::Flashbang) {
-        emitBurst(nade.pos, 18, 140.0f, {255, 255, 255, 255}, 0.35f, 5.0f);
-        emitBurst(nade.pos, 8, 60.0f, {255, 240, 180, 255}, 0.25f, 7.0f);
+        emitNadeParticles(nade.pos, 0);
         for (auto& a : actors_) {
             if (!a.active || !a.alive) {
                 continue;
             }
             if (map_.lineBlocked(nade.pos, a.pos)) {
+                continue;
+            }
+            if (nade.owner >= 0 && nade.owner < kMaxPlayers && actors_[nade.owner].active) {
+                if (!hostile(actors_[nade.owner], a)) {
+                    continue;
+                }
+            } else if (a.id == nade.owner) {
                 continue;
             }
             if (a.id == localId_) {
@@ -2083,9 +2276,7 @@ void World::explodeGrenade(Bullet& nade, Camera* cam) {
             receiveFlash(a, (20.0f / distance) * dot);
         }
     } else if (nade.weapon == WeaponId::HEGrenade) {
-        emitBurst(nade.pos, 22, 180.0f, {255, 160, 40, 255}, 0.4f, 6.0f);
-        emitBurst(nade.pos, 10, 80.0f, {255, 80, 20, 255}, 0.55f, 8.0f);
-        emitBurst(nade.pos, 8, 40.0f, {40, 40, 40, 255}, 0.7f, 5.0f);
+        emitNadeParticles(nade.pos, 1);
         if (cam) {
             const Vec2 c = cam->pos + Vec2{cam->viewW() * 0.5f, cam->viewH() * 0.5f};
             float dist2 = (c - nade.pos).length2();
@@ -2151,7 +2342,6 @@ void World::explodeGrenade(Bullet& nade, Camera* cam) {
             }
         }
     } else if (nade.weapon == WeaponId::SmokeGrenade) {
-        emitBurst(nade.pos, 14, 40.0f, {150, 150, 145, 255}, 1.2f, 10.0f);
         SmokeCloud* cloud = nullptr;
         for (auto& s : smokes_) {
             if (!s.active) {
@@ -2168,6 +2358,7 @@ void World::explodeGrenade(Bullet& nade, Camera* cam) {
             cloud->t = 0.0f;
             cloud->life = 12.0f;
             cloud->radius = 18.0f;
+            cloud->emitAcc = 8.0f;
         }
     }
 }
@@ -2217,7 +2408,12 @@ void World::updateBullets(float dt, Camera* cam) {
         }
         b.life -= dt;
         b.pos += b.vel * dt;
-        if (b.life <= 0.0f || map_.solid(static_cast<int>(b.pos.x / kTile), static_cast<int>(b.pos.y / kTile))) {
+        const int htx = static_cast<int>(b.pos.x / kTile);
+        const int hty = static_cast<int>(b.pos.y / kTile);
+        if (b.life <= 0.0f || map_.solid(htx, hty)) {
+            if (map_.at(htx, hty) == Tile::Nuclear) {
+                hitNuclear(htx, hty, b.owner, cam);
+            }
             b.active = false;
             spawnParticle(particles_, b.pos, {}, {200, 200, 180, 255}, 0.15f, 3.0f);
             continue;
@@ -2258,6 +2454,9 @@ void World::updateBullets(float dt, Camera* cam) {
 }
 
 void World::update(float dt, Input& input, Camera& cam, NetSession* net) {
+    if (bannerT_ > 0.0f) {
+        bannerT_ = std::max(0.0f, bannerT_ - dt);
+    }
     if (paused_) {
         if (matchOver_ && net && net->role() == NetRole::Host) {
             NetSnapshot snap{};
@@ -2365,7 +2564,9 @@ void World::update(float dt, Input& input, Camera& cam, NetSession* net) {
         }
         p.life -= dt;
         p.pos += p.vel * dt;
-        p.vel = p.vel * (1.0f - 1.8f * dt);
+        p.angle += p.spin * dt;
+        const float drag = p.sprite == 2 ? 0.45f : 1.8f;
+        p.vel = p.vel * (1.0f - drag * dt);
         if (p.life <= 0.0f) {
             p.active = false;
         }
@@ -2386,6 +2587,19 @@ void World::update(float dt, Input& input, Camera& cam, NetSession* net) {
         s.t += dt;
         const float grow = clamp(s.t / 1.6f, 0.0f, 1.0f);
         s.radius = 18.0f + grow * 70.0f;
+        if (s.t < s.life - 2.2f) {
+            s.emitAcc += dt * 36.0f;
+            while (s.emitAcc >= 1.0f) {
+                s.emitAcc -= 1.0f;
+                const float ang = frand(0.0f, kPi * 2.0f);
+                const float spd = frand(0.48f, 1.59f) * 55.0f;
+                const float life = frand(2.3f, 5.0f);
+                const float sz = frand(2.2f, 4.1f);
+                spawnFxParticle(particles_, s.pos + Vec2{frand(-6.0f, 6.0f), frand(-6.0f, 6.0f)},
+                                {std::cos(ang) * spd, std::sin(ang) * spd}, 2, life, sz, sz,
+                                {168, 168, 170, 255}, {133, 133, 135, 0}, frand(-8.0f, 8.0f));
+            }
+        }
         if (s.t >= s.life) {
             s.active = false;
         }
@@ -2511,6 +2725,7 @@ void World::render(SDL_Renderer* r, Assets& assets, Camera& cam) {
     const Sprite* sprCover = assets.get(map_.csTile("cover"));
     const Sprite* sprTree = assets.get(map_.csTile("tree"));
     const Sprite* sprDoor = assets.get(map_.csTile("door"));
+    const Sprite* sprNuke = assets.get("cs_nuclear");
     const int overlap = 1;
 
     for (int y = y0; y < y1; ++y) {
@@ -2539,6 +2754,13 @@ void World::render(SDL_Renderer* r, Assets& assets, Camera& cam) {
                 assets.drawFit(r, sprTree, px, py, tw, th);
             } else if (t == Tile::Door) {
                 assets.drawFit(r, sprDoor, px, py, tw, th);
+            } else if (t == Tile::Nuclear) {
+                assets.drawFit(r, sprNuke, px, py, tw, th);
+            } else if (t == Tile::Water) {
+                SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(r, 40, 90, 180, 110);
+                SDL_Rect wr{px, py, tw, th};
+                SDL_RenderFillRect(r, &wr);
             }
         }
     }
@@ -2546,19 +2768,18 @@ void World::render(SDL_Renderer* r, Assets& assets, Camera& cam) {
     if (mode_ == GameMode::ProtectBase) {
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
         for (const auto& b : bases_) {
-            if (!b.active) {
+            if (!b.active || b.hp <= 0) {
                 continue;
             }
             const Vec2 p = cam.toScreen(b.pos.x, b.pos.y);
             const int sz = std::max(10, static_cast<int>(kTile * z));
-            const bool destroyed = b.hp <= 0;
             const bool hurt = b.hurtT > 0.0f;
+            const Actor* me = local();
+            const SDL_Color c = baseHudColor(b.team, me ? me->team : b.team);
             if (hurt) {
                 SDL_SetRenderDrawColor(r, 255, 80, 40, 200);
             } else {
-                const SDL_Color c = teamColor(b.team);
-                SDL_SetRenderDrawColor(r, destroyed ? c.r / 3 : c.r, destroyed ? c.g / 3 : c.g,
-                                       destroyed ? c.b / 3 : c.b, 160);
+                SDL_SetRenderDrawColor(r, c.r, c.g, c.b, 160);
             }
             SDL_Rect pad{static_cast<int>(p.x) - sz / 2, static_cast<int>(p.y) - sz / 2, sz, sz};
             SDL_RenderFillRect(r, &pad);
@@ -2570,10 +2791,9 @@ void World::render(SDL_Renderer* r, Assets& assets, Camera& cam) {
             SDL_RenderFillRect(r, &bg);
             const float ratio = b.maxHp > 0 ? clamp(static_cast<float>(b.hp) / static_cast<float>(b.maxHp), 0.0f, 1.0f) : 0.0f;
             bg.w = std::max(1, static_cast<int>(static_cast<float>(bw) * ratio));
-            SDL_SetRenderDrawColor(r, ratio > 0.35f ? 40 : 200, ratio > 0.35f ? 200 : 40, 40, 255);
+            SDL_SetRenderDrawColor(r, c.r, c.g, c.b, 255);
             SDL_RenderFillRect(r, &bg);
-            assets.drawText(r, teamLetter(b.team), static_cast<int>(p.x) - 4, pad.y - bh - 16,
-                            {255, 230, 80, 255}, false);
+            assets.drawText(r, teamLetter(b.team), static_cast<int>(p.x) - 4, pad.y - bh - 16, c, false);
         }
     }
 
@@ -2584,10 +2804,8 @@ void World::render(SDL_Renderer* r, Assets& assets, Camera& cam) {
         }
         const float a = clamp(s.life / 8.0f, 0.0f, 1.0f);
         const Vec2 p = cam.toScreen(s.pos.x, s.pos.y);
-        const int sz = std::max(4, static_cast<int>(28.0f * z));
-        SDL_SetRenderDrawColor(r, 20, 18, 14, static_cast<Uint8>(90 * a));
-        SDL_Rect rc{static_cast<int>(p.x) - sz / 2, static_cast<int>(p.y) - sz / 2, sz, sz};
-        SDL_RenderFillRect(r, &rc);
+        assets.drawFx(r, "cs_scorch", p.x, p.y, 0.0f, 1.15f * z, static_cast<int>(140.0f * a),
+                      {20, 18, 14, 255}, false);
     }
 
     for (auto& b : bullets_) {
@@ -2654,52 +2872,36 @@ void World::render(SDL_Renderer* r, Assets& assets, Camera& cam) {
         const float u = clamp(fx.t / std::max(0.05f, fx.life), 0.0f, 1.0f);
         const Vec2 p = cam.toScreen(fx.pos.x, fx.pos.y);
         if (fx.kind == 1) {
-            const int outer = std::max(4, static_cast<int>((18.0f + u * 70.0f) * z));
-            const int inner = std::max(2, static_cast<int>((8.0f + u * 28.0f) * z));
-            SDL_SetRenderDrawColor(r, 255, 140, 30, static_cast<Uint8>(200 * (1.0f - u)));
-            SDL_Rect o{static_cast<int>(p.x) - outer / 2, static_cast<int>(p.y) - outer / 2, outer, outer};
-            SDL_RenderFillRect(r, &o);
-            SDL_SetRenderDrawColor(r, 255, 240, 180, static_cast<Uint8>(230 * (1.0f - u)));
-            SDL_Rect inn{static_cast<int>(p.x) - inner / 2, static_cast<int>(p.y) - inner / 2, inner, inner};
-            SDL_RenderFillRect(r, &inn);
+            assets.drawFx(r, "cs_explosion", p.x, p.y, fx.t * 40.0f, (1.4f + u * 1.6f) * z,
+                          static_cast<int>(220 * (1.0f - u)), {255, 90, 20, 255}, true);
         } else if (fx.kind == 0) {
-            const int outer = std::max(6, static_cast<int>((24.0f + u * 90.0f) * z));
-            SDL_SetRenderDrawColor(r, 255, 255, 255, static_cast<Uint8>(220 * (1.0f - u)));
-            SDL_Rect o{static_cast<int>(p.x) - outer / 2, static_cast<int>(p.y) - outer / 2, outer, outer};
-            SDL_RenderFillRect(r, &o);
-        } else {
-            const int outer = std::max(6, static_cast<int>((16.0f + u * 40.0f) * z));
-            SDL_SetRenderDrawColor(r, 170, 170, 165, static_cast<Uint8>(140 * (1.0f - u)));
-            SDL_Rect o{static_cast<int>(p.x) - outer / 2, static_cast<int>(p.y) - outer / 2, outer, outer};
-            SDL_RenderFillRect(r, &o);
-        }
-    }
-
-    for (auto& s : smokes_) {
-        if (!s.active) {
-            continue;
-        }
-        float fade = 1.0f;
-        if (s.t > s.life - 2.2f) {
-            fade = clamp((s.life - s.t) / 2.2f, 0.0f, 1.0f);
-        }
-        const int puffs = 7;
-        for (int i = 0; i < puffs; ++i) {
-            const float ang = (kPi * 2.0f * i) / puffs + s.t * 0.35f;
-            const float rad = s.radius * (0.25f + 0.22f * ((i % 3) + 1));
-            const float px = s.pos.x + std::cos(ang) * rad * 0.35f;
-            const float py = s.pos.y + std::sin(ang) * rad * 0.28f;
-            const Vec2 p = cam.toScreen(px, py);
-            const int sz = std::max(6, static_cast<int>(s.radius * (0.55f + 0.12f * (i % 3)) * z));
-            const int gray = 120 + (i % 4) * 18;
-            SDL_SetRenderDrawColor(r, gray, gray, gray - 8, static_cast<Uint8>(155 * fade));
-            SDL_Rect rc{static_cast<int>(p.x) - sz / 2, static_cast<int>(p.y) - sz / 2, sz, sz};
-            SDL_RenderFillRect(r, &rc);
+            assets.drawFx(r, "cs_flash", p.x, p.y, 0.0f, (1.6f + u * 2.4f) * z,
+                          static_cast<int>(230 * (1.0f - u)), {255, 255, 255, 255}, true);
         }
     }
 
     for (auto& p : particles_) {
-        if (!p.active) {
+        if (!p.active || p.sprite < 0) {
+            continue;
+        }
+        const float u = p.maxLife > 0.0f ? clamp(1.0f - p.life / p.maxLife, 0.0f, 1.0f) : 1.0f;
+        const Vec2 s = cam.toScreen(p.pos.x, p.pos.y);
+        const float sz = (p.size + (p.sizeEnd - p.size) * u) * z;
+        SDL_Color tint{
+            static_cast<Uint8>(p.color.r + static_cast<int>((p.colorEnd.r - p.color.r) * u)),
+            static_cast<Uint8>(p.color.g + static_cast<int>((p.colorEnd.g - p.color.g) * u)),
+            static_cast<Uint8>(p.color.b + static_cast<int>((p.colorEnd.b - p.color.b) * u)),
+            255};
+        const int alpha = static_cast<int>(p.color.a + (p.colorEnd.a - p.color.a) * u);
+        const char* name = p.sprite == 1 ? "cs_flash" : (p.sprite == 2 ? "cs_smoke" : "cs_explosion");
+        assets.drawFx(r, name, s.x, s.y, p.angle, sz, alpha, tint, p.sprite != 2);
+        if (p.sprite != 2) {
+            assets.drawFx(r, name, s.x, s.y, p.angle, sz, alpha / 2, tint, true);
+        }
+    }
+
+    for (auto& p : particles_) {
+        if (!p.active || p.sprite >= 0) {
             continue;
         }
         const Vec2 s = cam.toScreen(p.pos.x, p.pos.y);
@@ -2749,14 +2951,46 @@ void World::renderHud(SDL_Renderer* r, Assets& assets) {
             assets.drawText(r, "NEXT", 78, 10, {200, 200, 180, 255}, false);
         }
     } else if (mode_ == GameMode::LastSurvivor) {
-        SDL_SetRenderDrawColor(r, 0, 0, 0, 170);
-        SDL_Rect wb{6, 6, 90, 20};
+        int ids[kMaxPlayers];
+        int n = 0;
+        for (int i = 0; i < kMaxPlayers; ++i) {
+            if (actors_[i].active) {
+                ids[n++] = i;
+            }
+        }
+        std::sort(ids, ids + n, [&](int a, int b) {
+            if (actors_[a].alive != actors_[b].alive) {
+                return actors_[a].alive && !actors_[b].alive;
+            }
+            if (actors_[a].kills != actors_[b].kills) {
+                return actors_[a].kills > actors_[b].kills;
+            }
+            return actors_[a].id < actors_[b].id;
+        });
+        const int cols = n > 16 ? 2 : 1;
+        const int rows = (n + cols - 1) / std::max(1, cols);
+        SDL_SetRenderDrawColor(r, 0, 0, 0, 150);
+        SDL_Rect wb{6, 6, cols * 150, 16 + rows * 11};
         SDL_RenderFillRect(r, &wb);
-        assets.drawText(r, "ALIVE", 12, 10, {255, 220, 80, 255}, false);
-        assets.drawInt(r, aliveCount(), 58, 10, {255, 220, 80, 255}, false);
+        assets.drawText(r, "ALIVE", 10, 8, {255, 220, 80, 255}, false);
+        assets.drawInt(r, aliveCount(), 56, 8, {255, 220, 80, 255}, false);
+        for (int i = 0; i < n; ++i) {
+            const Actor& a = actors_[ids[i]];
+            const int col = i / std::max(1, rows);
+            const int row = i % std::max(1, rows);
+            const int x = 10 + col * 150;
+            const int y = 20 + row * 11;
+            const SDL_Color colr = a.id == localId_ ? SDL_Color{255, 220, 70, 255}
+                                                    : (a.alive ? SDL_Color{220, 220, 210, 255}
+                                                               : SDL_Color{160, 160, 150, 255});
+            if (!a.alive) {
+                drawSkull(r, x, y, {200, 200, 190, 255});
+            }
+            assets.drawText(r, a.name, x + (a.alive ? 0 : 10), y, colr, false);
+        }
     } else if (mode_ == GameMode::ProtectBase) {
         auto drawBaseBar = [&](int x, int y, const Base& b) {
-            const SDL_Color col = teamColor(b.team);
+            const SDL_Color col = baseHudColor(b.team, me->team);
             SDL_SetRenderDrawColor(r, 0, 0, 0, 180);
             SDL_Rect wb{x, y, 118, 16};
             SDL_RenderFillRect(r, &wb);
@@ -2774,20 +3008,59 @@ void World::renderHud(SDL_Renderer* r, Assets& assets) {
             }
             SDL_RenderFillRect(r, &bg);
         };
-        const int cols = teamCount_ <= 3 ? std::max(1, teamCount_) : 3;
+        int shown = 0;
+        int aliveBases = 0;
         for (int i = 0; i < teamCount_; ++i) {
-            if (!bases_[i].active) {
+            if (bases_[i].active && bases_[i].hp > 0) {
+                ++aliveBases;
+            }
+        }
+        const int cols = aliveBases <= 3 ? std::max(1, aliveBases) : 3;
+        for (int i = 0; i < teamCount_; ++i) {
+            if (!bases_[i].active || bases_[i].hp <= 0) {
                 continue;
             }
-            const int col = i % cols;
-            const int row = i / cols;
+            const int col = shown % cols;
+            const int row = shown / cols;
             drawBaseBar(6 + col * 122, 6 + row * 17, bases_[i]);
+            ++shown;
+        }
+    } else if (mode_ == GameMode::Normal) {
+        int ids[kMaxPlayers];
+        int n = 0;
+        for (int i = 0; i < kMaxPlayers; ++i) {
+            if (actors_[i].active) {
+                ids[n++] = i;
+            }
+        }
+        std::sort(ids, ids + n, [&](int a, int b) {
+            if (actors_[a].kills != actors_[b].kills) {
+                return actors_[a].kills > actors_[b].kills;
+            }
+            if (actors_[a].deaths != actors_[b].deaths) {
+                return actors_[a].deaths < actors_[b].deaths;
+            }
+            return actors_[a].id < actors_[b].id;
+        });
+        const int show = std::min(8, n);
+        SDL_SetRenderDrawColor(r, 0, 0, 0, 150);
+        SDL_Rect wb{6, 6, 148, 14 + show * 11};
+        SDL_RenderFillRect(r, &wb);
+        assets.drawText(r, "TOP", 10, 8, {200, 200, 180, 255}, false);
+        for (int i = 0; i < show; ++i) {
+            const Actor& a = actors_[ids[i]];
+            const SDL_Color colr = a.id == localId_ ? SDL_Color{255, 220, 70, 255} : SDL_Color{220, 220, 210, 255};
+            assets.drawText(r, a.name, 10, 20 + i * 11, colr, false);
+            assets.drawInt(r, a.kills, 110, 20 + i * 11, colr, false);
         }
     }
 
-    const int hudRows = mode_ == GameMode::ProtectBase ? (teamCount_ + 2) / 3 : 1;
-    assets.drawText(r, gameModeName(mode_), 6, mode_ == GameMode::ProtectBase ? (8 + hudRows * 17) : 28,
-                    {160, 170, 150, 255}, false);
+    const int hudRows = mode_ == GameMode::ProtectBase ? std::max(1, (teamCount_ + 2) / 3) : 1;
+    const int modeY = mode_ == GameMode::ProtectBase ? (8 + hudRows * 17)
+                      : (mode_ == GameMode::Normal || mode_ == GameMode::LastSurvivor ? -1 : 28);
+    if (modeY >= 0) {
+        assets.drawText(r, gameModeName(mode_), 6, modeY, {160, 170, 150, 255}, false);
+    }
 
     constexpr int mw = 64;
     constexpr int mh = 64;
@@ -2803,12 +3076,12 @@ void World::renderHud(SDL_Renderer* r, Assets& assets) {
     const float sy = static_cast<float>(mh) / static_cast<float>(std::max(1, map_.height()));
     if (mode_ == GameMode::ProtectBase) {
         for (const auto& b : bases_) {
-            if (!b.active) {
+            if (!b.active || b.hp <= 0) {
                 continue;
             }
             const int mx = mm.x + static_cast<int>(b.pos.x / kTile * sx);
             const int my = mm.y + static_cast<int>(b.pos.y / kTile * sy);
-            const SDL_Color c = teamColor(b.team);
+            const SDL_Color c = baseHudColor(b.team, me->team);
             SDL_SetRenderDrawColor(r, c.r, c.g, c.b, 255);
             SDL_Rect p{mx - 2, my - 2, 5, 5};
             SDL_RenderFillRect(r, &p);
@@ -2872,5 +3145,15 @@ void World::renderHud(SDL_Renderer* r, Assets& assets) {
         SDL_SetRenderDrawColor(r, 255, 255, 255, static_cast<Uint8>(alpha * 255.0f));
         SDL_Rect full{0, 0, kScreenW, kScreenH};
         SDL_RenderFillRect(r, &full);
+    }
+    if (bannerT_ > 0.0f && banner_[0]) {
+        const float fade = bannerT_ > 0.7f ? 1.0f : bannerT_ / 0.7f;
+        const int tw = assets.textWidth(banner_, false);
+        const int x = std::max(8, kScreenW / 2 - tw / 2);
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(r, 0, 0, 0, static_cast<Uint8>(190 * fade));
+        SDL_Rect bb{x - 8, 118, tw + 16, 18};
+        SDL_RenderFillRect(r, &bb);
+        assets.drawText(r, banner_, x, 122, {255, 220, 80, static_cast<Uint8>(255 * fade)}, false);
     }
 }

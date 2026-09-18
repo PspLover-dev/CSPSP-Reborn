@@ -19,11 +19,12 @@ const char* kMenu[] = {"SOLO", "MULTIPLAYER", "MAP EDITOR", "QUIT"};
 const char* kMulti[] = {"HOST PARTY", "JOIN SCAN", "ENTER SERVER", "BACK"};
 const char* kSizes[] = {"all", "small", "medium", "big", "extra"};
 constexpr int kSizeFilterCount = 5;
-const char* kEditTiles[] = {". floor", "# wall", "C crate", "B barrel", "D door", "S cover", "R tree", "T spawn-T",
-                            "O spawn-CT", "A site-A", "X site-B"};
-const Tile kEditTileIds[] = {Tile::Floor,  Tile::Wall,    Tile::Crate,   Tile::Barrel, Tile::Door, Tile::Cover,
-                             Tile::Tree,   Tile::SpawnT,  Tile::SpawnCT, Tile::SiteA,  Tile::SiteB};
-constexpr int kEditTileCount = 11;
+const char* kEditTiles[] = {". floor", "# wall", "C crate", "B barrel", "D door", "~ water", "S cover", "R tree",
+                            "N nuclear", "T spawn-T", "O spawn-CT", "A site-A", "X site-B"};
+const Tile kEditTileIds[] = {Tile::Floor,  Tile::Wall,    Tile::Crate,   Tile::Barrel, Tile::Door, Tile::Water,
+                             Tile::Cover,  Tile::Tree,    Tile::Nuclear, Tile::SpawnT, Tile::SpawnCT, Tile::SiteA,
+                             Tile::SiteB};
+constexpr int kEditTileCount = 13;
 constexpr int kModeCount = static_cast<int>(GameMode::Count);
 const int kEditorDims[] = {50, 100, 200, 500};
 const char* kEditorSizeIds[] = {"small", "medium", "big", "extra"};
@@ -50,15 +51,15 @@ int parseSavedNum(const std::string& s) {
 
 int playerCountForSize(const std::string& size) {
     if (size == "small") {
-        return 8;
+        return 10;
     }
     if (size == "medium") {
-        return 16;
+        return 18;
     }
     if (size == "big") {
-        return 24;
+        return 26;
     }
-    return 32;
+    return 34;
 }
 
 const char* teamTag(int team, int teamCount, GameMode mode) {
@@ -252,6 +253,9 @@ void App::update(float dt) {
         case Screen::Mode:
             updateMode();
             break;
+        case Screen::Bases:
+            updateBases();
+            break;
         case Screen::Difficulty:
             updateDifficulty();
             break;
@@ -280,6 +284,9 @@ void App::update(float dt) {
             break;
         case Screen::EditorSize:
             updateEditorSize();
+            break;
+        case Screen::EditorTheme:
+            updateEditorTheme();
             break;
         case Screen::Editor:
             updateEditor(dt);
@@ -376,7 +383,8 @@ void App::updateMode() {
         clampTeamPicks(teamPick_, teamCountPick_, maps_[static_cast<size_t>(soloMap_)].size,
                        static_cast<GameMode>(modePick_));
     }
-    if (!maps_.empty() && modeUsesTeams(static_cast<GameMode>(modePick_))) {
+    if (!maps_.empty() && modeUsesTeams(static_cast<GameMode>(modePick_)) &&
+        static_cast<GameMode>(modePick_) != GameMode::ProtectBase) {
         const int mx = maxTeamsForSize(maps_[static_cast<size_t>(soloMap_)].size);
         if (input_.left()) {
             teamCountPick_ = teamCountPick_ <= 2 ? mx : teamCountPick_ - 1;
@@ -388,6 +396,14 @@ void App::updateMode() {
                        static_cast<GameMode>(modePick_));
     }
     if (input_.confirm()) {
+        if (static_cast<GameMode>(modePick_) == GameMode::ProtectBase) {
+            if (!maps_.empty()) {
+                clampTeamPicks(teamPick_, teamCountPick_, maps_[static_cast<size_t>(soloMap_)].size,
+                               GameMode::ProtectBase);
+            }
+            screen_ = Screen::Bases;
+            return;
+        }
         if (hostModeSelect_) {
             status_ = "Creating party...";
             if (net_.host(partyName_)) {
@@ -407,9 +423,49 @@ void App::updateMode() {
     }
 }
 
-void App::updateDifficulty() {
+void App::updateBases() {
     if (input_.cancel() || input_.start()) {
         screen_ = Screen::Mode;
+        return;
+    }
+    int mx = 2;
+    if (!maps_.empty()) {
+        mx = maxTeamsForSize(maps_[static_cast<size_t>(soloMap_)].size);
+    }
+    clampTeamPicks(teamPick_, teamCountPick_, maps_.empty() ? "small" : maps_[static_cast<size_t>(soloMap_)].size,
+                   GameMode::ProtectBase);
+    if (input_.up()) {
+        teamCountPick_ = teamCountPick_ <= 2 ? mx : teamCountPick_ - 1;
+    }
+    if (input_.downNav()) {
+        teamCountPick_ = teamCountPick_ >= mx ? 2 : teamCountPick_ + 1;
+    }
+    clampTeamPicks(teamPick_, teamCountPick_, maps_.empty() ? "small" : maps_[static_cast<size_t>(soloMap_)].size,
+                   GameMode::ProtectBase);
+    if (!input_.confirm()) {
+        return;
+    }
+    if (hostModeSelect_) {
+        status_ = "Creating party...";
+        if (net_.host(partyName_)) {
+            screen_ = Screen::Host;
+            status_ = "Hosting " + net_.partyName();
+            net_.setLocalTeam(static_cast<uint8_t>(teamPick_));
+            net_.sendLobbyInfo(static_cast<uint16_t>(soloMap_), static_cast<uint8_t>(modePick_),
+                               static_cast<uint8_t>(difficultyPick_), static_cast<uint8_t>(teamCountPick_));
+        } else {
+            status_ = net_.lastError();
+            screen_ = Screen::Multi;
+        }
+        hostModeSelect_ = false;
+    } else {
+        screen_ = Screen::Difficulty;
+    }
+}
+
+void App::updateDifficulty() {
+    if (input_.cancel() || input_.start()) {
+        screen_ = static_cast<GameMode>(modePick_) == GameMode::ProtectBase ? Screen::Bases : Screen::Mode;
         return;
     }
     if (input_.up()) {
@@ -775,14 +831,31 @@ void App::updateEditorSize() {
 
 void App::beginNewEditor(int sizeIdx) {
     editSize_ = sizeIdx;
-    editorMap_.createBlank(kEditorDims[editSize_], kEditorDims[editSize_], kEditorSizeIds[editSize_], "dust",
-                           "NEW MAP");
+    editTheme_ = 0;
     editX_ = editY_ = 2;
     editTile_ = 1;
     editZoom_ = zoomForSize(kEditorSizeIds[editSize_]);
     editFile_.clear();
     status_.clear();
-    goTo(Screen::Editor);
+    goTo(Screen::EditorTheme);
+}
+
+void App::updateEditorTheme() {
+    if (input_.cancel()) {
+        goTo(Screen::EditorSize);
+        return;
+    }
+    if (input_.up()) {
+        editTheme_ = (editTheme_ + GameMap::kThemeCount - 1) % GameMap::kThemeCount;
+    }
+    if (input_.downNav()) {
+        editTheme_ = (editTheme_ + 1) % GameMap::kThemeCount;
+    }
+    if (input_.confirm()) {
+        editorMap_.createBlank(kEditorDims[editSize_], kEditorDims[editSize_], kEditorSizeIds[editSize_],
+                               GameMap::themeName(editTheme_), "NEW MAP");
+        goTo(Screen::Editor);
+    }
 }
 
 void App::beginSavedEditor(int mapIndex) {
@@ -798,6 +871,7 @@ void App::beginSavedEditor(int mapIndex) {
     editFile_ = e.file;
     editX_ = editY_ = 2;
     editTile_ = 1;
+    editTheme_ = GameMap::themeIndex(editorMap_.theme());
     editZoom_ = zoomForSize(editorMap_.sizeName());
     status_.clear();
     goTo(Screen::Editor);
@@ -981,6 +1055,12 @@ void App::updateEditor(float dt) {
         return;
     }
 
+    if (input_.cycleWeapon()) {
+        const int next = (GameMap::themeIndex(editorMap_.theme()) + 1) % GameMap::kThemeCount;
+        editorMap_.setTheme(GameMap::themeName(next));
+        editTheme_ = next;
+    }
+
     const bool pal = input_.down(SDL_CONTROLLER_BUTTON_X);
     const int palCols = 6;
     if (pal) {
@@ -1053,6 +1133,9 @@ void App::render() {
         case Screen::Mode:
             renderMode();
             break;
+        case Screen::Bases:
+            renderBases();
+            break;
         case Screen::Difficulty:
             renderDifficulty();
             break;
@@ -1076,6 +1159,9 @@ void App::render() {
             break;
         case Screen::EditorSize:
             renderEditorSize();
+            break;
+        case Screen::EditorTheme:
+            renderEditorTheme();
             break;
         case Screen::Editor:
             renderEditor();
@@ -1146,11 +1232,13 @@ void App::renderMode() {
     }
     const GameMode m = static_cast<GameMode>(modePick_);
     assets_.drawText(renderer_, gameModeHint(m), 50, 172, {160, 180, 150, 255}, false);
-    if (modeUsesTeams(m) && !maps_.empty()) {
+    if (modeUsesTeams(m) && m != GameMode::ProtectBase && !maps_.empty()) {
         char teams[48];
         std::snprintf(teams, sizeof(teams), "Teams %d / %d", teamCountPick_,
                       maxTeamsForSize(maps_[static_cast<size_t>(soloMap_)].size));
         assets_.drawText(renderer_, teams, 50, 188, {200, 210, 170, 255}, false);
+    } else if (m == GameMode::ProtectBase) {
+        assets_.drawText(renderer_, "Next: choose how many bases", 50, 188, {200, 210, 170, 255}, false);
     }
     if (m == GameMode::Zombie) {
         assets_.drawCentered(renderer_, "zoimbie1_hold", 390, 120, 20, 1.8f);
@@ -1164,11 +1252,31 @@ void App::renderMode() {
         assets_.drawCentered(renderer_, "robot1_machine", 390, 120, 210, 1.6f);
     }
     const char* modeHelp = hostModeSelect_
-                               ? (modeUsesTeams(m) ? "Up/Down mode  Left/Right teams  Cross lobby"
-                                                   : "Up/Down mode  Cross lobby")
-                               : (modeUsesTeams(m) ? "Up/Down mode  Left/Right teams  Cross next"
-                                                   : "Up/Down mode  Cross next");
+                               ? (modeUsesTeams(m) && m != GameMode::ProtectBase
+                                      ? "Up/Down mode  Left/Right teams  Cross lobby"
+                                      : "Up/Down mode  Cross next")
+                               : (modeUsesTeams(m) && m != GameMode::ProtectBase
+                                      ? "Up/Down mode  Left/Right teams  Cross next"
+                                      : "Up/Down mode  Cross next");
     assets_.drawText(renderer_, modeHelp, 20, 230, {140, 150, 130, 255}, false);
+}
+
+void App::renderBases() {
+    renderPanel();
+    assets_.drawText(renderer_, "BASES", 190, 28, {230, 220, 160, 255}, true);
+    assets_.drawText(renderer_, "How many bases / teams on this map", 70, 52, {160, 180, 150, 255}, false);
+    int mx = 2;
+    if (!maps_.empty()) {
+        mx = maxTeamsForSize(maps_[static_cast<size_t>(soloMap_)].size);
+    }
+    for (int n = 2; n <= mx; ++n) {
+        const bool sel = n == teamCountPick_;
+        const SDL_Color c = sel ? SDL_Color{255, 220, 80, 255} : SDL_Color{200, 200, 190, 255};
+        char line[32];
+        std::snprintf(line, sizeof(line), "%d BASES", n);
+        assets_.drawText(renderer_, std::string(sel ? "> " : "  ") + line, 160, 80 + (n - 2) * 26, c, true);
+    }
+    assets_.drawText(renderer_, "Up/Down select  Cross next  Circle back", 40, 230, {140, 150, 130, 255}, false);
 }
 
 void App::renderDifficulty() {
@@ -1227,7 +1335,7 @@ void App::renderSkin() {
 void App::renderMulti() {
     renderPanel();
     assets_.drawText(renderer_, "MULTIPLAYER", 140, 36, {230, 220, 160, 255}, true);
-    assets_.drawText(renderer_, "Host on one PSP, up to 16 players", 80, 58, {160, 180, 150, 255}, false);
+    assets_.drawText(renderer_, "Host on one PSP, up to 34 players", 80, 58, {160, 180, 150, 255}, false);
     for (int i = 0; i < 4; ++i) {
         const SDL_Color c = i == menuIndex_ ? SDL_Color{255, 220, 80, 255} : SDL_Color{200, 200, 190, 255};
         assets_.drawText(renderer_, std::string(i == menuIndex_ ? "> " : "  ") + kMulti[i], 160, 90 + i * 22, c, false);
@@ -1324,23 +1432,61 @@ void App::renderPlay() {
     world_.render(renderer_, assets_, camera_);
     world_.renderHud(renderer_, assets_);
     if (world_.matchOver()) {
-        box(renderer_, 90, 80, 300, 110, {0, 0, 0, 210}, {220, 200, 80, 255});
+        const bool board = world_.mode() == GameMode::Normal;
+        box(renderer_, 90, 70, 300, board ? 168 : 110, {0, 0, 0, 210}, {220, 200, 80, 255});
         const bool win = world_.winnerId() == world_.localId();
-        assets_.drawText(renderer_, win ? "YOU WIN" : "MATCH OVER", 160, 98, {255, 220, 80, 255}, true);
-        assets_.drawText(renderer_, gameModeName(world_.mode()), 140, 124, {200, 210, 180, 255}, false);
+        assets_.drawText(renderer_, win ? "YOU WIN" : "MATCH OVER", 160, 88, {255, 220, 80, 255}, true);
+        assets_.drawText(renderer_, gameModeName(world_.mode()), 140, 114, {200, 210, 180, 255}, false);
+        int footerY = 154;
         if (world_.mode() == GameMode::LastSurvivor) {
             char alive[32];
             std::snprintf(alive, sizeof(alive), "Last alive  id %d", world_.winnerId());
-            assets_.drawText(renderer_, alive, 150, 144, {180, 200, 160, 255}, false);
+            assets_.drawText(renderer_, alive, 150, 134, {180, 200, 160, 255}, false);
         } else if (world_.mode() == GameMode::Zombie) {
             char w[32];
             std::snprintf(w, sizeof(w), "Wave %d", world_.wave());
-            assets_.drawText(renderer_, w, 190, 144, {180, 200, 160, 255}, false);
+            assets_.drawText(renderer_, w, 190, 134, {180, 200, 160, 255}, false);
         } else if (world_.mode() == GameMode::ProtectBase) {
-            assets_.drawText(renderer_, win ? "Enemy base down" : "Your base fell", 150, 144,
+            assets_.drawText(renderer_, win ? "Enemy base down" : "Your base fell", 150, 134,
                              {180, 200, 160, 255}, false);
+        } else if (world_.mode() == GameMode::Normal) {
+            int y = 134;
+            int shown = 0;
+            int ids[kMaxPlayers];
+            int n = 0;
+            for (int i = 0; i < kMaxPlayers; ++i) {
+                const Actor* a = world_.actor(i);
+                if (a && a->active) {
+                    ids[n++] = i;
+                }
+            }
+            std::sort(ids, ids + n, [&](int a, int b) {
+                const Actor* aa = world_.actor(a);
+                const Actor* bb = world_.actor(b);
+                if (!aa || !bb) {
+                    return a < b;
+                }
+                if (aa->kills != bb->kills) {
+                    return aa->kills > bb->kills;
+                }
+                return aa->deaths < bb->deaths;
+            });
+            for (int i = 0; i < n && shown < 5; ++i) {
+                const Actor* a = world_.actor(ids[i]);
+                if (!a) {
+                    continue;
+                }
+                char line[48];
+                std::snprintf(line, sizeof(line), "%d  %s  %d", shown + 1, a->name.c_str(), a->kills);
+                const SDL_Color col = a->id == world_.localId() ? SDL_Color{255, 220, 70, 255}
+                                                                : SDL_Color{200, 210, 180, 255};
+                assets_.drawText(renderer_, line, 140, y, col, false);
+                y += 12;
+                ++shown;
+            }
+            footerY = y + 6;
         }
-        assets_.drawText(renderer_, "Circle menu", 180, 164, {220, 220, 210, 255}, false);
+        assets_.drawText(renderer_, "Circle menu", 180, footerY, {220, 220, 210, 255}, false);
     } else if (world_.paused()) {
         box(renderer_, 120, 90, 240, 90, {0, 0, 0, 200}, {220, 200, 80, 255});
         assets_.drawText(renderer_, "PAUSED", 190, 110, {255, 220, 80, 255}, true);
@@ -1365,6 +1511,13 @@ void App::drawMapTile(int px, int py, int size, Tile t) {
         assets_.drawFit(renderer_, editorMap_.csTile("tree"), px, py, size, size);
     } else if (t == Tile::Door) {
         assets_.drawFit(renderer_, editorMap_.csTile("door"), px, py, size, size);
+    } else if (t == Tile::Water) {
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer_, 40, 90, 180, 140);
+        SDL_Rect wr{px, py, size, size};
+        SDL_RenderFillRect(renderer_, &wr);
+    } else if (t == Tile::Nuclear) {
+        assets_.drawFit(renderer_, "cs_nuclear", px, py, size, size);
     } else if (t == Tile::SpawnT) {
         SDL_SetRenderDrawColor(renderer_, 255, 140, 40, 255);
         SDL_Rect m{px + size / 4, py + size / 4, size / 2, size / 2};
@@ -1408,6 +1561,29 @@ void App::renderEditorSize() {
     assets_.drawText(renderer_, "Up/Down select  Cross open  Circle back", 40, 230, {140, 150, 130, 255}, false);
 }
 
+void App::renderEditorTheme() {
+    renderPanel();
+    assets_.drawText(renderer_, "MAP THEME", 155, 28, {230, 220, 160, 255}, true);
+    assets_.drawText(renderer_, "Tileset for this map", 130, 52, {160, 180, 150, 255}, false);
+    const int shown = 8;
+    int start = 0;
+    if (editTheme_ >= shown) {
+        start = editTheme_ - shown + 1;
+    }
+    for (int row = 0; row < shown && start + row < GameMap::kThemeCount; ++row) {
+        const int i = start + row;
+        const bool sel = i == editTheme_;
+        const SDL_Color c = sel ? SDL_Color{255, 220, 80, 255} : SDL_Color{200, 200, 190, 255};
+        assets_.drawText(renderer_, std::string(sel ? "> " : "  ") + GameMap::themeName(i), 160, 72 + row * 18, c,
+                         false);
+    }
+    const std::string floor = std::string("cs_") + GameMap::themeName(editTheme_) + "_floor";
+    const std::string wall = std::string("cs_") + GameMap::themeName(editTheme_) + "_wall";
+    assets_.drawFit(renderer_, floor, 360, 90, 48, 48);
+    assets_.drawFit(renderer_, wall, 360, 142, 48, 48);
+    assets_.drawText(renderer_, "Up/Down select  Cross edit  Circle back", 36, 230, {140, 150, 130, 255}, false);
+}
+
 void App::renderEditor() {
     const float cell = editZoom_;
     const float viewW = static_cast<float>(kScreenW);
@@ -1443,11 +1619,12 @@ void App::renderEditor() {
     const SDL_Color hudCol{240, 230, 180, 255};
     assets_.drawText(renderer_, "EDITOR", 6, 6, hudCol, false);
     assets_.drawText(renderer_, editorMap_.name(), 58, 6, hudCol, false);
-    assets_.drawText(renderer_, "z", 150, 6, hudCol, false);
-    assets_.drawInt(renderer_, static_cast<int>(editZoom_ + 0.5f), 160, 6, hudCol, false);
-    assets_.drawInt(renderer_, editX_, 192, 6, hudCol, false);
-    assets_.drawInt(renderer_, editY_, 224, 6, hudCol, false);
-    assets_.drawText(renderer_, "Start save  Circle back", 268, 6, hudCol, false);
+    assets_.drawText(renderer_, editorMap_.theme(), 150, 6, hudCol, false);
+    assets_.drawText(renderer_, "z", 210, 6, hudCol, false);
+    assets_.drawInt(renderer_, static_cast<int>(editZoom_ + 0.5f), 220, 6, hudCol, false);
+    assets_.drawInt(renderer_, editX_, 252, 6, hudCol, false);
+    assets_.drawInt(renderer_, editY_, 284, 6, hudCol, false);
+    assets_.drawText(renderer_, "Start save", 330, 6, hudCol, false);
     const float zoomT = clamp((editZoom_ - 6.0f) / 66.0f, 0.0f, 1.0f);
     SDL_SetRenderDrawColor(renderer_, 60, 70, 50, 255);
     SDL_Rect zoomBg{150, 16, 66, 3};
@@ -1482,7 +1659,7 @@ void App::renderEditor() {
     }
 
     assets_.drawText(renderer_, kEditTiles[editTile_], palX + palW + 8, palY + 8, {240, 230, 180, 255}, false);
-    assets_.drawText(renderer_, "Hold L/R zoom  Cross paint", palX + palW + 8, palY + 24,
+    assets_.drawText(renderer_, "Hold L/R zoom  Cross paint  Triangle theme", palX + palW + 8, palY + 24,
                      {160, 170, 150, 255}, false);
     if (!status_.empty()) {
         assets_.drawText(renderer_, status_, palX + palW + 8, palY + 40, {255, 200, 80, 255}, false);

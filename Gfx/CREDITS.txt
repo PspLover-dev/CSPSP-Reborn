@@ -1,6 +1,6 @@
 CSPSP graphics
 
-In-game players, weapons, muzzle and tiles from kevinbchen/cspsp
+In-game players, weapons, muzzle, tiles, and grenade particles from kevinbchen/cspsp
 https://github.com/kevinbchen/cspsp
 
 Menus and zombies: Kenney.nl Top-down Shooter pack (CC0)

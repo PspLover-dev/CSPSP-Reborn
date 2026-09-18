@@ -56,6 +56,10 @@ public:
     std::string csTile(const char* slot) const;
     const char* themeKey() const;
 
+    static constexpr int kThemeCount = 10;
+    static const char* themeName(int i);
+    static int themeIndex(const std::string& name);
+
 private:
     int w_ = 0;
     int h_ = 0;

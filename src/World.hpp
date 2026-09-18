@@ -82,6 +82,11 @@ struct Particle {
     float maxLife = 0.2f;
     SDL_Color color{255, 200, 80, 255};
     float size = 2.0f;
+    int sprite = -1;
+    float angle = 0.0f;
+    float spin = 0.0f;
+    float sizeEnd = 2.0f;
+    SDL_Color colorEnd{255, 200, 80, 0};
 };
 
 struct BlastFx {
@@ -98,6 +103,7 @@ struct SmokeCloud {
     float t = 0.0f;
     float life = 12.0f;
     float radius = 0.0f;
+    float emitAcc = 0.0f;
 };
 
 struct Scorch {
@@ -111,6 +117,13 @@ struct Loot {
     Vec2 pos;
     WeaponId weapon = WeaponId::Glock;
     int ammo = 0;
+};
+
+struct NukeBlock {
+    bool active = false;
+    int tx = 0;
+    int ty = 0;
+    int hp = 0;
 };
 
 struct Base {
@@ -138,6 +151,9 @@ public:
     const GameMap& map() const { return map_; }
     Actor* local() { return localId_ >= 0 && localId_ < kMaxPlayers ? &actors_[localId_] : nullptr; }
     const Actor* local() const { return localId_ >= 0 && localId_ < kMaxPlayers ? &actors_[localId_] : nullptr; }
+    const Actor* actor(int id) const {
+        return id >= 0 && id < kMaxPlayers ? &actors_[id] : nullptr;
+    }
     int localId() const { return localId_; }
     Difficulty difficulty() const { return difficulty_; }
     GameMode mode() const { return mode_; }
@@ -165,6 +181,10 @@ private:
     bool throughSmoke(Vec2 a, Vec2 b) const;
     bool sightBlocked(Vec2 a, Vec2 b, float maxDist = 0.0f) const;
     void emitBurst(Vec2 pos, int n, float speed, SDL_Color c, float life, float size);
+    void emitNadeParticles(Vec2 pos, int kind);
+    void scanNukes();
+    void hitNuclear(int tx, int ty, int owner, Camera* cam);
+    void explodeNuclear(NukeBlock& n, int owner, Camera* cam);
     void updateWaves(float dt);
     void spawnWave(int n);
     int findSlot() const;
@@ -228,6 +248,9 @@ private:
     float camViewW_ = static_cast<float>(kScreenW);
     float camViewH_ = static_cast<float>(kScreenH);
     Base bases_[kMaxTeams]{};
+    std::vector<NukeBlock> nukes_;
+    char banner_[80]{};
+    float bannerT_ = 0.0f;
 };
 
 void drawCspspSkin(SDL_Renderer* r, Assets& assets, int skinId, float sx, float sy, float z, float angle = -1.2f);

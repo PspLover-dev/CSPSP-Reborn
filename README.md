@@ -25,10 +25,10 @@ Classic team deathmatch. Bots fill the remaining slots. You fight with allies ag
 
 | Map size | Grid | Players | Teams |
 |---|---|---|---|
-| Small | 50×50 | 8 | 2 |
-| Medium | 100×100 | 16 | 2–3 |
-| Big | 200×200 | 24 | 2–4 |
-| Extra / large | 500×500 | 32 | 2–6 |
+| Small | 50×50 | 10 | 2 |
+| Medium | 100×100 | 18 | 2–3 |
+| Big | 200×200 | 26 | 2–4 |
+| Extra / large | 500×500 | 34 | 2–6 |
 
 ### Zombie Survival
 
@@ -61,7 +61,7 @@ Each team has a base tile with a long health bar. Destroy every enemy base; the 
 
 ## Multiplayer
 
-One PSP hosts an Adhoc party (name up to 8 characters). Others **Join scan** or **Enter server**. Max occupancy follows the map (up to 32). Host picks map, mode, and (when the mode has teams) how many teams.
+One PSP hosts an Adhoc party (name up to 8 characters). Others **Join scan** or **Enter server**. Max occupancy follows the map (up to 34). Host picks map, mode, and (when the mode has teams) how many teams.
 
 ## Map editor
 
@@ -69,7 +69,7 @@ Paint tiles on small / medium / big / extra grids. Analog pans on large maps. St
 
 ## Weapons
 
-The original CSPSP arsenal: knife, pistols, shotguns, SMGs, rifles, snipers, M249, plus **HE**, **flashbang**, and **smoke** (fuse and effects match the original). Dead players drop guns as loot.
+The original CSPSP arsenal: knife, pistols, shotguns, SMGs, rifles, snipers, M249, plus **HE**, **flashbang**, and **smoke** (fuse and `particles.png` GFX match the original). Dead players drop guns as loot.
 
 ## Build from source
 

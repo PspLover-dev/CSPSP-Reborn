@@ -35,6 +35,8 @@ char GameMap::tileToChar(Tile t) {
             return 'S';
         case Tile::Tree:
             return 'R';
+        case Tile::Nuclear:
+            return 'N';
         default:
             return '.';
     }
@@ -64,6 +66,8 @@ Tile GameMap::charToTile(char c) {
             return Tile::Cover;
         case 'R':
             return Tile::Tree;
+        case 'N':
+            return Tile::Nuclear;
         default:
             return Tile::Floor;
     }
@@ -216,6 +220,7 @@ bool GameMap::solid(int x, int y) const {
         case Tile::Barrel:
         case Tile::Tree:
         case Tile::Cover:
+        case Tile::Nuclear:
             return true;
         default:
             return false;
@@ -509,35 +514,30 @@ void GameMap::clear() {
     h_ = 0;
 }
 
+const char* GameMap::themeName(int i) {
+    static const char* kThemes[] = {"dust", "office", "inferno", "nuke", "vertigo",
+                                    "cache", "aztec", "italy", "mill", "warehouse"};
+    if (i < 0) {
+        i = 0;
+    }
+    i %= kThemeCount;
+    if (i < 0) {
+        i += kThemeCount;
+    }
+    return kThemes[i];
+}
+
+int GameMap::themeIndex(const std::string& name) {
+    for (int i = 0; i < kThemeCount; ++i) {
+        if (name == themeName(i)) {
+            return i;
+        }
+    }
+    return 0;
+}
+
 const char* GameMap::themeKey() const {
-    if (theme_ == "office") {
-        return "office";
-    }
-    if (theme_ == "inferno") {
-        return "inferno";
-    }
-    if (theme_ == "nuke") {
-        return "nuke";
-    }
-    if (theme_ == "vertigo") {
-        return "vertigo";
-    }
-    if (theme_ == "cache") {
-        return "cache";
-    }
-    if (theme_ == "aztec") {
-        return "aztec";
-    }
-    if (theme_ == "italy") {
-        return "italy";
-    }
-    if (theme_ == "mill") {
-        return "mill";
-    }
-    if (theme_ == "warehouse") {
-        return "warehouse";
-    }
-    return "dust";
+    return themeName(themeIndex(theme_));
 }
 
 std::string GameMap::csTile(const char* slot) const {

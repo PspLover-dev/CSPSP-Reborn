@@ -7,7 +7,7 @@
 constexpr int kScreenW = 480;
 constexpr int kScreenH = 272;
 constexpr int kTile = 32;
-constexpr int kMaxPlayers = 32;
+constexpr int kMaxPlayers = 36;
 constexpr float kPlayerRadius = 10.0f;
 constexpr float kPlayerSpeed = 130.0f;
 constexpr float kAnalogDeadzone = 0.18f;
@@ -126,6 +126,7 @@ enum class Tile : uint8_t {
     SiteB,
     Cover,
     Tree,
+    Nuclear,
     Count
 };
 

@@ -29,6 +29,8 @@ public:
     void drawFit(SDL_Renderer* r, const Sprite* s, int x, int y, int w, int h, int alpha = 255) const;
     void drawCentered(SDL_Renderer* r, const std::string& name, float cx, float cy, float angleDeg,
                       float scale = 1.0f) const;
+    void drawFx(SDL_Renderer* r, const std::string& name, float cx, float cy, float angleDeg, float scale,
+                int alpha, SDL_Color tint, bool additive = false) const;
     void drawHotspot(SDL_Renderer* r, const std::string& name, float x, float y, float angleDeg, float scale,
                      float hx, float hy, bool hflip = false) const;
     void drawHotspotXY(SDL_Renderer* r, const std::string& name, float x, float y, float angleDeg, float scaleX,

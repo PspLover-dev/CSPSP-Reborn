@@ -18,7 +18,22 @@ public:
     void shutdown();
 
 private:
-    enum class Screen { Menu, Solo, Mode, Difficulty, Skin, Multi, Host, Join, Enter, Play, EditorSize, Editor };
+    enum class Screen {
+        Menu,
+        Solo,
+        Mode,
+        Bases,
+        Difficulty,
+        Skin,
+        Multi,
+        Host,
+        Join,
+        Enter,
+        Play,
+        EditorSize,
+        EditorTheme,
+        Editor
+    };
 
     void update(float dt);
     void render();
@@ -26,6 +41,7 @@ private:
     void updateMenu();
     void updateSolo();
     void updateMode();
+    void updateBases();
     void updateDifficulty();
     void updateSkin();
     void updateMulti();
@@ -34,12 +50,14 @@ private:
     void updateEnter();
     void updatePlay();
     void updateEditorSize();
+    void updateEditorTheme();
     void updateEditor(float dt);
     void goTo(Screen s);
 
     void renderMenu();
     void renderSolo();
     void renderMode();
+    void renderBases();
     void renderDifficulty();
     void renderSkin();
     void renderMulti();
@@ -47,6 +65,7 @@ private:
     void renderEnter();
     void renderPlay();
     void renderEditorSize();
+    void renderEditorTheme();
     void renderEditor();
     void renderPanel();
     void drawMapTile(int px, int py, int size, Tile t);
@@ -95,6 +114,7 @@ private:
     int editTile_ = 1;
     int editSize_ = 0;
     int editPick_ = 0;
+    int editTheme_ = 0;
     std::string editFile_;
     float editZoom_ = 32.0f;
     float inputLock_ = 0.0f;
