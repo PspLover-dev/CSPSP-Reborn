@@ -2,6 +2,7 @@ CSPSP 1
 name Iceworld
 theme cache
 size small
+unlock 3
 w 50
 h 50
 ##################################################

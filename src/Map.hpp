@@ -10,6 +10,7 @@ struct MapEntry {
     std::string size;
     std::string theme;
     std::string name;
+    int unlockLevel = 0;
 };
 
 class GameMap {
@@ -39,6 +40,8 @@ public:
     const std::string& name() const { return name_; }
     const std::string& theme() const { return theme_; }
     const std::string& sizeName() const { return sizeName_; }
+    int unlockLevel() const { return unlockLevel_; }
+    void setUnlockLevel(int v) { unlockLevel_ = v; }
     void setName(const std::string& n) { name_ = n; }
     void setTheme(const std::string& t) { theme_ = t; }
     void setSizeName(const std::string& s) { sizeName_ = s; }
@@ -67,6 +70,7 @@ private:
     std::string name_ = "New Map";
     std::string theme_ = "dust";
     std::string sizeName_ = "small";
+    int unlockLevel_ = 0;
     std::vector<Vec2> spawnT_;
     std::vector<Vec2> spawnCT_;
     std::vector<Vec2> siteA_;

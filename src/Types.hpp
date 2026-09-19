@@ -161,7 +161,41 @@ enum class WeaponId : uint8_t {
     Flashbang,
     HEGrenade,
     SmokeGrenade,
+    MP7,
+    MP9,
+    Bizon,
+    Vector,
+    Tec9,
+    CZ75,
+    R8,
+    Nova,
+    MAG7,
+    SawedOff,
+    Negev,
+    SSG08,
+    Scar20,
+    F2000,
+    Groza,
+    ScarH,
+    HoneyBadger,
+    M14,
+    AA12,
+    M60,
     Count
+};
+
+constexpr int kWeaponCount = static_cast<int>(WeaponId::Count);
+constexpr int kGrenadeTypes = 3;
+
+enum class ControlScheme : uint8_t { Analog = 0, Dpad = 1 };
+
+struct MatchOpts {
+    bool career = false;
+    float resistMul = 1.0f;
+    float speedMul = 1.0f;
+    WeaponId loadout[3] = {WeaponId::Glock, WeaponId::USP, WeaponId::MP5};
+    int nadeStock[3] = {2, 2, 1};
+    int* careerNades = nullptr;
 };
 
 struct Vec2 {

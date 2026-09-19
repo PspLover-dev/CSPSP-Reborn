@@ -10,14 +10,20 @@ A ready-to-run package is **`CSPSP-PSP.zip`**.
 
 1. Extract the zip. You should get a `CSPSP` folder.
 2. Copy it to `ms0:/PSP/GAME/CSPSP/` (Memory Stick) or, in PPSSPP, to `PSP/GAME/CSPSP/`.
-3. The folder must contain `EBOOT.PBP`, `Gfx/`, and `maps/`.
+3. The folder must contain `EBOOT.PBP`, `Gfx/`, `maps/`, and `Profiles/`.
 4. Launch **CS 2D PSP** from the XMB / PPSSPP game list.
 
 Custom Firmware (or PPSSPP) is required. Adhoc multiplayer needs WLAN enabled on real hardware.
 
 ## Game modes
 
-Solo and Adhoc multiplayer share the same five modes. After the map, pick a mode, then Easy / Medium / Hard. Modes with teams also let you pick your team’s skin (8 looks from the original `players.png`; each team gets a unique skin).
+Boot menu: **Career**, **New game**, **Multiplayer**, **Map Editor**, **Controls**, **Quit**.
+
+**Career** uses a named profile (`Profiles/[NAME].bin`): cash, XP/level, unlocked guns/skins, grenade stock, and stats. Shop buys weapons (rarer = costlier) and grenade refills; the first skin is free, others cost $500. A match starts with 3 unlocked guns. Thrown grenades spend career stock (no grenade reload). XP raises level, bullet resist, and move speed for you and allies. End of match (or Career → Save) writes the profile. Rewards scale with difficulty, win/lose, zombie waves, or kills.
+
+**New game / Multiplayer** (outside Career) can only pick guns, skins, and original maps unlocked by at least one Career profile, plus maps you made in the editor. Resist/speed stay at default.
+
+Solo and Adhoc share the same five modes. After the map, pick a mode, then Easy / Medium / Hard, then a 3-gun loadout. Modes with teams also let you pick your team’s skin (8 looks from the original `players.png`; each team gets a unique skin).
 
 ### Normal
 
@@ -32,7 +38,7 @@ Classic team deathmatch. Bots fill the remaining slots. You fight with allies ag
 
 ### Zombie Survival
 
-Humans (your side + allied bots) versus waves of zombies. Zombies spawn around the map edges, off-screen, and never on your spawn. Survive as long as you can. No extra team picker — everyone human shares one skin.
+Humans (your side + allied bots) versus waves of zombies. Zombies spawn around the map edges, off-screen, and never on your spawn. If you die, the match ends (no player respawn). No extra team picker — everyone human shares one skin.
 
 ### Seul contre tous
 
@@ -48,16 +54,31 @@ Each team has a base tile with a long health bar. Destroy every enemy base; the 
 
 ## Controls
 
+Two schemes (Controls menu):
+
+**Analog (default)**
+
 | Input | Action |
 |---|---|
 | Analog | Move and face |
-| R / Cross | Fire (camera shakes) |
+| R / Cross | Fire |
 | Square | Reload |
 | Triangle | Next weapon |
 | L | Previous weapon |
 | Start | Pause |
-| Circle | Back / erase in the editor |
-| D-Pad | Menus, team count, skin grid |
+| Circle | Back |
+
+**D-Pad**
+
+| Input | Action |
+|---|---|
+| D-Pad | Move |
+| L / R | Rotate (CCW / CW) |
+| Square / Triangle | Previous / next weapon |
+| Cross | Fire / throw grenade |
+| Select | Reload |
+| Start | Pause |
+| Circle | Back |
 
 ## Multiplayer
 
@@ -65,11 +86,11 @@ One PSP hosts an Adhoc party (name up to 8 characters). Others **Join scan** or 
 
 ## Map editor
 
-Paint tiles on small / medium / big / extra grids. Analog pans on large maps. Start saves under `maps/saved_*.csp`. Saved maps are kept when the 100 stock maps are regenerated.
+Paint tiles on small / medium / big / extra grids. Analog pans on large maps. Start saves under `maps/saved_*.csp`. Stock maps are the original CSPSP layouts (Dust2 first, then unlock by Career level). Editor maps are always available.
 
 ## Weapons
 
-The original CSPSP arsenal: knife, pistols, shotguns, SMGs, rifles, snipers, M249, plus **HE**, **flashbang**, and **smoke** (fuse and `particles.png` GFX match the original). Dead players drop guns as loot.
+Original CSPSP arsenal plus 20 extra guns. Each gun has rarity 1–5 (damage and shop price scale with rarity), plus **HE**, **flashbang**, and **smoke** (fuse and `particles.png` GFX match the original). You start a match with 3 guns; bots keep the same 3 after respawn. Dead players drop guns as loot.
 
 ## Build from source
 

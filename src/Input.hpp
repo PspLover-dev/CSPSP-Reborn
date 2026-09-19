@@ -11,9 +11,15 @@ public:
     void handleEvent(const SDL_Event& e);
     void pollNative();
 
+    void setScheme(ControlScheme s) { scheme_ = s; }
+    ControlScheme scheme() const { return scheme_; }
+
     float analogX() const { return analogX_; }
     float analogY() const { return analogY_; }
     Vec2 analog() const { return {analogX_, analogY_}; }
+    float moveX() const;
+    float moveY() const;
+    float rotateAxis() const;
 
     bool down(int button) const;
     bool pressed(int button) const;
@@ -21,19 +27,13 @@ public:
 
     bool confirm() const { return pressed(SDL_CONTROLLER_BUTTON_A) || pressedKey(SDL_SCANCODE_RETURN); }
     bool cancel() const { return pressed(SDL_CONTROLLER_BUTTON_B) || pressedKey(SDL_SCANCODE_ESCAPE); }
-    bool fireHeld() const {
-        return down(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) || downKey(SDL_SCANCODE_SPACE) ||
-               downKey(SDL_SCANCODE_LCTRL);
-    }
-    bool firePressed() const {
-        return pressed(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) || pressed(SDL_CONTROLLER_BUTTON_A) ||
-               pressedKey(SDL_SCANCODE_SPACE) || pressedKey(SDL_SCANCODE_LCTRL);
-    }
-    bool reload() const { return pressed(SDL_CONTROLLER_BUTTON_X) || pressedKey(SDL_SCANCODE_R); }
-    bool prevWeapon() const { return pressed(SDL_CONTROLLER_BUTTON_LEFTSHOULDER) || pressedKey(SDL_SCANCODE_Q); }
-    bool nextWeapon() const { return pressedKey(SDL_SCANCODE_E); }
-    bool cycleWeapon() const { return pressed(SDL_CONTROLLER_BUTTON_Y) || pressedKey(SDL_SCANCODE_TAB); }
-    bool start() const { return pressed(SDL_CONTROLLER_BUTTON_START); }
+    bool fireHeld() const;
+    bool firePressed() const;
+    bool reload() const;
+    bool prevWeapon() const;
+    bool nextWeapon() const;
+    bool cycleWeapon() const { return nextWeapon(); }
+    bool start() const { return pressed(SDL_CONTROLLER_BUTTON_START) || pressedKey(SDL_SCANCODE_F5); }
     bool select() const { return pressed(SDL_CONTROLLER_BUTTON_BACK); }
     bool up() const {
         return pressed(SDL_CONTROLLER_BUTTON_DPAD_UP) || pressedKey(SDL_SCANCODE_UP) || pressedKey(SDL_SCANCODE_W);
@@ -59,6 +59,7 @@ private:
     bool pressedKey(SDL_Scancode s) const;
     bool downKey(SDL_Scancode s) const;
 
+    ControlScheme scheme_ = ControlScheme::Analog;
     SDL_GameController* pad_ = nullptr;
     float analogX_ = 0.0f;
     float analogY_ = 0.0f;

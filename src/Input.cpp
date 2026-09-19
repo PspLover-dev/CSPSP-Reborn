@@ -135,8 +135,7 @@ void Input::pollNative() {
         analogY_ = 0.0f;
     }
 
-    // Keyboard analog fallback (desktop / PPSSPP keyboard mapping)
-    if (keys_) {
+    if (scheme_ == ControlScheme::Analog && keys_) {
         float kx = 0.0f, ky = 0.0f;
         if (keys_[SDL_SCANCODE_A] || keys_[SDL_SCANCODE_LEFT]) {
             kx -= 1.0f;
@@ -155,4 +154,82 @@ void Input::pollNative() {
             analogY_ = ky;
         }
     }
+}
+
+float Input::moveX() const {
+    if (scheme_ == ControlScheme::Dpad) {
+        float x = 0.0f;
+        if (down(SDL_CONTROLLER_BUTTON_DPAD_LEFT) || downKey(SDL_SCANCODE_A) || downKey(SDL_SCANCODE_LEFT)) {
+            x -= 1.0f;
+        }
+        if (down(SDL_CONTROLLER_BUTTON_DPAD_RIGHT) || downKey(SDL_SCANCODE_D) || downKey(SDL_SCANCODE_RIGHT)) {
+            x += 1.0f;
+        }
+        return x;
+    }
+    return analogX_;
+}
+
+float Input::moveY() const {
+    if (scheme_ == ControlScheme::Dpad) {
+        float y = 0.0f;
+        if (down(SDL_CONTROLLER_BUTTON_DPAD_UP) || downKey(SDL_SCANCODE_W) || downKey(SDL_SCANCODE_UP)) {
+            y -= 1.0f;
+        }
+        if (down(SDL_CONTROLLER_BUTTON_DPAD_DOWN) || downKey(SDL_SCANCODE_S) || downKey(SDL_SCANCODE_DOWN)) {
+            y += 1.0f;
+        }
+        return y;
+    }
+    return analogY_;
+}
+
+float Input::rotateAxis() const {
+    if (scheme_ != ControlScheme::Dpad) {
+        return 0.0f;
+    }
+    float r = 0.0f;
+    if (lHeld()) {
+        r -= 1.0f;
+    }
+    if (rHeld()) {
+        r += 1.0f;
+    }
+    return r;
+}
+
+bool Input::fireHeld() const {
+    if (scheme_ == ControlScheme::Dpad) {
+        return down(SDL_CONTROLLER_BUTTON_A) || downKey(SDL_SCANCODE_SPACE) || downKey(SDL_SCANCODE_LCTRL);
+    }
+    return down(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) || downKey(SDL_SCANCODE_SPACE) || downKey(SDL_SCANCODE_LCTRL);
+}
+
+bool Input::firePressed() const {
+    if (scheme_ == ControlScheme::Dpad) {
+        return pressed(SDL_CONTROLLER_BUTTON_A) || pressedKey(SDL_SCANCODE_SPACE) || pressedKey(SDL_SCANCODE_LCTRL);
+    }
+    return pressed(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) || pressed(SDL_CONTROLLER_BUTTON_A) ||
+           pressedKey(SDL_SCANCODE_SPACE) || pressedKey(SDL_SCANCODE_LCTRL);
+}
+
+bool Input::reload() const {
+    if (scheme_ == ControlScheme::Dpad) {
+        return pressed(SDL_CONTROLLER_BUTTON_BACK) || pressedKey(SDL_SCANCODE_R);
+    }
+    return pressed(SDL_CONTROLLER_BUTTON_X) || pressedKey(SDL_SCANCODE_R);
+}
+
+bool Input::prevWeapon() const {
+    if (scheme_ == ControlScheme::Dpad) {
+        return pressed(SDL_CONTROLLER_BUTTON_X) || pressedKey(SDL_SCANCODE_Q);
+    }
+    return pressed(SDL_CONTROLLER_BUTTON_LEFTSHOULDER) || pressedKey(SDL_SCANCODE_Q);
+}
+
+bool Input::nextWeapon() const {
+    if (scheme_ == ControlScheme::Dpad) {
+        return pressed(SDL_CONTROLLER_BUTTON_Y) || pressedKey(SDL_SCANCODE_E) || pressedKey(SDL_SCANCODE_TAB);
+    }
+    return pressed(SDL_CONTROLLER_BUTTON_Y) || pressedKey(SDL_SCANCODE_E) || pressedKey(SDL_SCANCODE_TAB);
 }

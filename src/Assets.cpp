@@ -121,6 +121,17 @@ void Assets::registerCspsp() {
             addSprite(ground, "gunsground.png", x, y, 32, 32);
         }
     }
+    if (ensureTexture("extra_guns.png") && ensureTexture("extra_gunsground.png")) {
+        for (int id = 0; id < 20; ++id) {
+            const int x = (id % 4) * 32;
+            const int y = (id / 4) * 32;
+            char hand[24], ground[24];
+            std::snprintf(hand, sizeof(hand), "cs_gun_%d", 28 + id);
+            std::snprintf(ground, sizeof(ground), "cs_ground_%d", 28 + id);
+            addSprite(hand, "extra_guns.png", x, y, 32, 32);
+            addSprite(ground, "extra_gunsground.png", x, y, 32, 32);
+        }
+    }
     if (ensureTexture("muzzleflash.png")) {
         for (int i = 0; i < 3; ++i) {
             char name[24];
@@ -136,6 +147,9 @@ void Assets::registerCspsp() {
     }
     if (ensureTexture("decals.png")) {
         addSprite("cs_scorch", "decals.png", 0, 0, 32, 32);
+    }
+    if (ensureTexture("medkit.png")) {
+        addSprite("cs_medkit", "medkit.png", 0, 0, 32, 32);
     }
     if (ensureTexture("cspsp_tiles.png")) {
         addSprite("cs_nuclear", "cspsp_tiles.png", 2 * 32, 3 * 32, 32, 32);

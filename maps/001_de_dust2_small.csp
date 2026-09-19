@@ -2,6 +2,7 @@ CSPSP 1
 name Dust2
 theme dust
 size small
+unlock 0
 w 50
 h 50
 ##################################################

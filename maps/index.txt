@@ -1,100 +1,17 @@
 001_de_dust2_small.csp	small	dust	Dust2
-002_de_dust2_medium.csp	medium	dust	Dust2 II
-003_de_dust2_m_small.csp	small	dust	Dust2 Mirror
 004_office2d_small.csp	small	office	Office
-005_office2d_medium.csp	medium	office	Office II
-006_office2d_m_small.csp	small	office	Office Mirror
 007_iceworld_small.csp	small	cache	Iceworld
-008_iceworld_medium.csp	medium	cache	Iceworld II
-009_iceworld_m_small.csp	small	cache	Iceworld Mirror
 010_fy_dodgeball_small.csp	small	vertigo	Dodgeball
-011_fy_dodgeball_medium.csp	medium	vertigo	Dodgeball II
-012_fy_dodgeball_m_small.csp	small	vertigo	Dodgeball Mirror
 013_fy_nade_small.csp	small	inferno	Nade
-014_fy_nade_medium.csp	medium	inferno	Nade II
-015_fy_nade_m_small.csp	small	inferno	Nade Mirror
 016_fy_poolday_small.csp	small	aztec	Poolday
-017_fy_poolday_medium.csp	medium	aztec	Poolday II
-018_fy_poolday_m_small.csp	small	aztec	Poolday Mirror
 019_castlevonbrown_small.csp	small	italy	Castle
-020_castlevonbrown_medium.csp	medium	italy	Castle II
-021_castlevonbrown_m_small.csp	small	italy	Castle Mirror
 022_circle_small.csp	small	warehouse	Circle
-023_circle_medium.csp	medium	warehouse	Circle II
-024_circle_m_small.csp	small	warehouse	Circle Mirror
 025_guano_small.csp	small	mill	Guano
-026_guano_medium.csp	medium	mill	Guano II
-027_guano_m_small.csp	small	mill	Guano Mirror
 028_silent_forest_small.csp	small	aztec	Silent Forest
-029_silent_forest_medium.csp	medium	aztec	Silent Forest II
-030_silent_forest_m_small.csp	small	aztec	Silent Forest Mirror
 031_small_forest_small.csp	small	aztec	Small Forest
-032_small_forest_medium.csp	medium	aztec	Small Forest II
-033_small_forest_m_small.csp	small	aztec	Small Forest Mirror
 034_small_train_yard_small.csp	small	warehouse	Train Yard
-035_small_train_yard_medium.csp	medium	warehouse	Train Yard II
-036_small_train_yard_m_small.csp	small	warehouse	Train Yard Mirror
 037_lasertag_small.csp	small	nuke	Lasertag
-038_lasertag_medium.csp	medium	nuke	Lasertag II
-039_lasertag_m_small.csp	small	nuke	Lasertag Mirror
 040_lasertag2_small.csp	small	nuke	Lasertag 2
-041_lasertag2_medium.csp	medium	nuke	Lasertag 2 II
-042_lasertag2_m_small.csp	small	nuke	Lasertag 2 Mirror
 043_louismap_small.csp	small	office	Louis
-044_louismap_medium.csp	medium	office	Louis II
-045_louismap_m_small.csp	small	office	Louis Mirror
 046_river_small.csp	small	italy	River
-047_river_medium.csp	medium	italy	River II
-048_river_m_small.csp	small	italy	River Mirror
 049_winter_small.csp	small	cache	Winter
-050_winter_medium.csp	medium	cache	Winter II
-051_winter_m_small.csp	small	cache	Winter Mirror
-052_de_dust2_l_big.csp	big	dust	Dust2 Large
-053_iceworld_l_big.csp	big	cache	Iceworld Large
-054_fy_dodgeball_l_big.csp	big	vertigo	Dodgeball Large
-055_fy_poolday_l_big.csp	big	aztec	Poolday Large
-056_circle_l_big.csp	big	warehouse	Circle Large
-057_small_train_yard_l_big.csp	big	warehouse	Train Yard Large
-058_aztec_lanes_big.csp	big	aztec	Alley Big 01
-059_mill_open_big.csp	big	mill	Plateau Big 02
-060_dust_open_big.csp	big	dust	Dust Big 03
-061_nuke_arena_big.csp	big	nuke	Pool Big 04
-062_warehouse_lanes_big.csp	big	warehouse	Alley Big 05
-063_vertigo_arena_big.csp	big	vertigo	Cage Big 06
-064_inferno_sites_big.csp	big	inferno	Inferno Big 07
-065_italy_arena_big.csp	big	italy	Pool Big 08
-066_cache_lanes_big.csp	big	cache	Alley Big 09
-067_office_lanes_big.csp	big	office	Long Big 10
-068_aztec_sites_big.csp	big	aztec	Inferno Big 11
-069_mill_arena_big.csp	big	mill	Pool Big 12
-070_dust_lanes_big.csp	big	dust	Alley Big 13
-071_nuke_sprawl_big.csp	big	nuke	Docks Big 14
-072_warehouse_sites_big.csp	big	warehouse	Inferno Big 15
-073_vertigo_arena_big.csp	big	vertigo	Pool Big 16
-074_inferno_lanes_big.csp	big	inferno	Alley Big 17
-075_italy_compound_big.csp	big	italy	Italy Big 18
-076_cache_sites_big.csp	big	cache	Inferno Big 19
-077_office_arena_big.csp	big	office	Pool Big 20
-078_aztec_lanes_big.csp	big	aztec	Alley Big 21
-079_mill_open_big.csp	big	mill	Plateau Big 22
-080_dust_compound_extra.csp	extra	dust	Militia Extra 23
-081_nuke_sprawl_extra.csp	extra	nuke	Mill Extra 24
-082_warehouse_lanes_extra.csp	extra	warehouse	Alley Extra 25
-083_vertigo_arena_extra.csp	extra	vertigo	Cage Extra 26
-084_inferno_open_extra.csp	extra	inferno	Dust Extra 27
-085_italy_compound_extra.csp	extra	italy	Compound Extra 28
-086_cache_sprawl_extra.csp	extra	cache	Train Extra 29
-087_office_lanes_extra.csp	extra	office	Long Extra 30
-088_aztec_arena_extra.csp	extra	aztec	Iceworld Extra 31
-089_mill_open_extra.csp	extra	mill	Yard Extra 32
-090_dust_compound_extra.csp	extra	dust	Village Extra 33
-091_nuke_sprawl_extra.csp	extra	nuke	Docks Extra 34
-092_warehouse_lanes_extra.csp	extra	warehouse	Assault Extra 35
-093_vertigo_arena_extra.csp	extra	vertigo	Pool Extra 36
-094_inferno_open_extra.csp	extra	inferno	Plaza Extra 37
-095_italy_compound_extra.csp	extra	italy	Italy Extra 38
-096_cache_sprawl_extra.csp	extra	cache	Warehouse Extra 39
-097_office_lanes_extra.csp	extra	office	Dust Extra 40
-098_aztec_arena_extra.csp	extra	aztec	Pit Extra 41
-099_mill_open_extra.csp	extra	mill	Plateau Extra 42
-100_dust_compound_extra.csp	extra	dust	Militia Extra 43

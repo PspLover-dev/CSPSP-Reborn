@@ -12,6 +12,7 @@ set(SRC
     src/Map.cpp
     src/World.cpp
     src/Net.cpp
+    src/Profile.cpp
 )
 
 add_executable(cspsp ${SRC})
@@ -49,10 +50,12 @@ if(PSP)
         VERSION "1.00"
     )
     add_custom_command(TARGET cspsp POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E rm -rf $<TARGET_FILE_DIR:cspsp>/Gfx $<TARGET_FILE_DIR:cspsp>/maps
+        COMMAND ${CMAKE_COMMAND} -E rm -rf $<TARGET_FILE_DIR:cspsp>/Gfx $<TARGET_FILE_DIR:cspsp>/maps $<TARGET_FILE_DIR:cspsp>/Profiles
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Gfx $<TARGET_FILE_DIR:cspsp>/Gfx
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/maps $<TARGET_FILE_DIR:cspsp>/maps
-        COMMENT "Copying Gfx and maps next to EBOOT.PBP"
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:cspsp>/Profiles
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/Profiles/.keep $<TARGET_FILE_DIR:cspsp>/Profiles/.keep
+        COMMENT "Copying Gfx, maps and Profiles next to EBOOT.PBP"
     )
 else()
     find_package(SDL2_image REQUIRED)

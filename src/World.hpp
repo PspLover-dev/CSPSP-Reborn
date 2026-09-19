@@ -22,8 +22,16 @@ struct Actor {
     float angle = 0.0f;
     int hp = 100;
     WeaponId weapon = WeaponId::Glock;
+    WeaponId loadout[3] = {WeaponId::Glock, WeaponId::USP, WeaponId::MP5};
+    WeaponId startLoadout[3] = {WeaponId::Glock, WeaponId::USP, WeaponId::MP5};
+    int loadoutMag[3] = {20, 12, 30};
+    int loadoutReserve[3] = {80, 72, 150};
+    int nadeStock[3] = {2, 2, 1};
+    int hudSlot = 0;
     int mag = 20;
     int reserve = 120;
+    float resistMul = 1.0f;
+    float speedMul = 1.0f;
     float cooldown = 0.0f;
     float reloadT = 0.0f;
     float muzzleT = 0.0f;
@@ -117,6 +125,7 @@ struct Loot {
     Vec2 pos;
     WeaponId weapon = WeaponId::Glock;
     int ammo = 0;
+    bool medkit = false;
 };
 
 struct NukeBlock {
@@ -140,7 +149,12 @@ public:
     ~World() { freeMinimap(); }
     bool loadMap(const std::string& path);
     void startMatch(Team localTeam, int botCount, int localId = 0, Difficulty difficulty = Difficulty::Medium,
-                    GameMode mode = GameMode::Normal, int teamCount = 2, int localSkin = -1);
+                    GameMode mode = GameMode::Normal, int teamCount = 2, int localSkin = -1,
+                    MatchOpts opts = {});
+    void setCareerHud(bool on, int cash, int level, int xp, int xpNeed);
+    bool career() const { return career_; }
+    bool localWon() const { return matchOver_ && winnerId_ == localId_; }
+    int localBasesDestroyed() const { return localBases_; }
     void addPlayer(int id, Team team, bool bot, const std::string& name);
     void fillBots(int count);
     void update(float dt, Input& input, Camera& cam, NetSession* net);
@@ -166,6 +180,11 @@ public:
     void setPaused(bool p) { paused_ = p; }
 
 private:
+    void giveLoadout(Actor& a);
+    void storeSlot(Actor& a);
+    void equipSlot(Actor& a, int slot);
+    void cycleHud(Actor& a, int dir);
+    float mitigate(const Actor& a, float dmg) const;
     void spawnActor(int id, Team team, bool bot, const std::string& name, bool zombie = false);
     void rollTeamSkins(int localTeamIdx, int localSkin);
     int takeSkin(Team team, bool zombie);
@@ -216,7 +235,9 @@ private:
     void killActor(Actor& a);
     void dropLoot(Vec2 pos, WeaponId weapon, int ammo);
     void applyLoot(Actor& a, Loot& loot);
-    void updateLoot();
+    void updateLoot(float dt);
+    void spawnMedkit();
+    int countMedkits() const;
     void bakeMinimap(SDL_Renderer* r);
     void freeMinimap();
 
@@ -251,6 +272,16 @@ private:
     std::vector<NukeBlock> nukes_;
     char banner_[80]{};
     float bannerT_ = 0.0f;
+    MatchOpts opts_{};
+    bool career_ = false;
+    int* careerNades_ = nullptr;
+    int localBases_ = 0;
+    bool careerHud_ = false;
+    int hudCash_ = 0;
+    int hudLevel_ = 1;
+    int hudXp_ = 0;
+    int hudXpNeed_ = 100;
+    float medkitT_ = 8.0f;
 };
 
 void drawCspspSkin(SDL_Renderer* r, Assets& assets, int skinId, float sx, float sy, float z, float angle = -1.2f);

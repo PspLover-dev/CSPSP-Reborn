@@ -177,6 +177,21 @@ WeaponId botWeapon(Difficulty d, Team team, int id) {
     return (id % 2) ? WeaponId::M4A1 : WeaponId::FAMAS;
 }
 
+WeaponId randomLoadoutGun(int salt) {
+    static const WeaponId kPool[] = {
+        WeaponId::Glock,  WeaponId::USP,     WeaponId::P228,   WeaponId::Deagle, WeaponId::FiveSeven,
+        WeaponId::Elite,  WeaponId::M3,      WeaponId::XM1014, WeaponId::TMP,    WeaponId::MAC10,
+        WeaponId::MP5,    WeaponId::UMP,     WeaponId::P90,    WeaponId::FAMAS,  WeaponId::GALIL,
+        WeaponId::Scout,  WeaponId::M4A1,    WeaponId::AK47,   WeaponId::AUG,    WeaponId::SG552,
+        WeaponId::SG550,  WeaponId::G3SG1,   WeaponId::AWP,    WeaponId::M249,   WeaponId::MP7,
+        WeaponId::MP9,    WeaponId::Bizon,   WeaponId::Vector, WeaponId::Tec9,   WeaponId::CZ75,
+        WeaponId::R8,     WeaponId::Nova,    WeaponId::MAG7,   WeaponId::SawedOff, WeaponId::Negev,
+        WeaponId::SSG08,  WeaponId::Scar20,  WeaponId::F2000,  WeaponId::Groza,  WeaponId::ScarH,
+        WeaponId::HoneyBadger, WeaponId::M14, WeaponId::AA12,  WeaponId::M60};
+    const int n = static_cast<int>(sizeof(kPool) / sizeof(kPool[0]));
+    return kPool[std::abs(salt) % n];
+}
+
 void drawCspspPlayer(SDL_Renderer* r, Assets& assets, const Actor& a, float sx, float sy, float z) {
     int sid = a.skinId;
     if (sid < 0 || sid >= kSkinCount) {
@@ -336,6 +351,101 @@ void drawCspspSkin(SDL_Renderer* r, Assets& assets, int skinId, float sx, float 
 bool World::loadMap(const std::string& path) {
     freeMinimap();
     return map_.load(path);
+}
+
+void World::setCareerHud(bool on, int cash, int level, int xp, int xpNeed) {
+    careerHud_ = on;
+    hudCash_ = cash;
+    hudLevel_ = level;
+    hudXp_ = xp;
+    hudXpNeed_ = std::max(1, xpNeed);
+}
+
+void World::storeSlot(Actor& a) {
+    if (a.hudSlot >= 0 && a.hudSlot < 3) {
+        a.loadout[a.hudSlot] = a.weapon;
+        a.loadoutMag[a.hudSlot] = a.mag;
+        a.loadoutReserve[a.hudSlot] = a.reserve;
+    } else if (a.hudSlot >= 3 && a.hudSlot < 6) {
+        a.nadeStock[a.hudSlot - 3] = a.mag;
+    }
+}
+
+void World::equipSlot(Actor& a, int slot) {
+    a.hudSlot = ((slot % 6) + 6) % 6;
+    if (a.hudSlot < 3) {
+        a.weapon = a.loadout[a.hudSlot];
+        a.mag = a.loadoutMag[a.hudSlot];
+        a.reserve = a.loadoutReserve[a.hudSlot];
+    } else {
+        const int gi = a.hudSlot - 3;
+        a.weapon = grenadeFromIndex(gi);
+        a.mag = a.nadeStock[gi];
+        a.reserve = 0;
+    }
+    a.reloadT = 0.0f;
+}
+
+void World::cycleHud(Actor& a, int dir) {
+    storeSlot(a);
+    equipSlot(a, a.hudSlot + dir);
+}
+
+void World::giveLoadout(Actor& a) {
+    if (a.zombie) {
+        a.loadout[0] = a.loadout[1] = a.loadout[2] = WeaponId::Knife;
+        a.loadoutMag[0] = a.loadoutMag[1] = a.loadoutMag[2] = 1;
+        a.loadoutReserve[0] = a.loadoutReserve[1] = a.loadoutReserve[2] = 1;
+        a.nadeStock[0] = a.nadeStock[1] = a.nadeStock[2] = 0;
+        a.weapon = WeaponId::Knife;
+        a.mag = 1;
+        a.reserve = 1;
+        a.hudSlot = 0;
+        return;
+    }
+    if (!a.bot) {
+        for (int i = 0; i < 3; ++i) {
+            a.loadout[i] = opts_.loadout[i];
+            const WeaponDef& w = weaponDef(a.loadout[i]);
+            a.loadoutMag[i] = w.mag;
+            a.loadoutReserve[i] = w.reserve;
+            a.nadeStock[i] = opts_.nadeStock[i];
+        }
+    } else {
+        for (int i = 0; i < 3; ++i) {
+            WeaponId id = randomLoadoutGun(a.id * 17 + i * 31 + static_cast<int>(difficulty_) * 9);
+            if (i == 0) {
+                id = botWeapon(difficulty_, botLoadoutTeam(a.team), a.id);
+            }
+            for (int j = 0; j < i; ++j) {
+                if (a.loadout[j] == id) {
+                    id = randomLoadoutGun(a.id * 13 + i * 41 + j * 7 + 3);
+                }
+            }
+            a.loadout[i] = id;
+            const WeaponDef& w = weaponDef(id);
+            a.loadoutMag[i] = w.mag;
+            a.loadoutReserve[i] = w.reserve;
+        }
+        a.nadeStock[0] = 1;
+        a.nadeStock[1] = 1;
+        a.nadeStock[2] = 0;
+    }
+    a.hudSlot = 0;
+    a.weapon = a.loadout[0];
+    a.mag = a.loadoutMag[0];
+    a.reserve = a.loadoutReserve[0];
+    for (int i = 0; i < 3; ++i) {
+        a.startLoadout[i] = a.loadout[i];
+    }
+}
+
+float World::mitigate(const Actor& a, float dmg) const {
+    dmg *= a.resistMul;
+    if (a.id == localId_) {
+        dmg *= tune(difficulty_).incomingMul;
+    }
+    return dmg;
 }
 
 void World::freeMinimap() {
@@ -566,12 +676,18 @@ void World::spawnActor(int id, Team team, bool bot, const std::string& name, boo
     a.flashT = 0.0f;
     a.flashIntensity = 1.0f;
     a.skin = zombie ? "zoimbie1" : actorSkin(team, id);
-    a.weapon = zombie ? WeaponId::Knife
-                      : (a.bot ? botWeapon(difficulty_, botLoadoutTeam(team), id)
-                               : ((teamIndex(team) % 2) == 0 ? WeaponId::AK47 : WeaponId::M4A1));
-    const WeaponDef& w = weaponDef(a.weapon);
-    a.mag = w.mag;
-    a.reserve = w.reserve;
+    giveLoadout(a);
+    a.resistMul = 1.0f;
+    a.speedMul = 1.0f;
+    if (career_ && !zombie) {
+        const Actor* me = (localId_ >= 0 && localId_ < kMaxPlayers && actors_[localId_].active)
+                              ? &actors_[localId_]
+                              : nullptr;
+        if (!a.bot || (me && !hostile(a, *me))) {
+            a.resistMul = opts_.resistMul;
+            a.speedMul = opts_.speedMul;
+        }
+    }
     a.hp = zombie ? (38 + wave_ * 6) : (a.bot ? static_cast<int>(tune(difficulty_).botHp) : 100);
     a.radarT = 0.0f;
     const int spawnN = modeUsesTeams(mode_) ? teamCount_ : 2;
@@ -600,9 +716,14 @@ void World::spawnActor(int id, Team team, bool bot, const std::string& name, boo
 }
 
 void World::startMatch(Team localTeam, int botCount, int localId, Difficulty difficulty, GameMode mode, int teamCount,
-                       int localSkin) {
+                       int localSkin, MatchOpts opts) {
     difficulty_ = difficulty;
     mode_ = mode;
+    opts_ = opts;
+    career_ = opts.career;
+    careerNades_ = opts.careerNades;
+    localBases_ = 0;
+    medkitT_ = 6.0f + static_cast<float>(irand(6));
     if (modeUsesTeams(mode_)) {
         teamCount_ = std::max(2, std::min(kMaxTeams, teamCount));
     } else if (mode_ == GameMode::Zombie) {
@@ -883,26 +1004,108 @@ void World::dropLoot(Vec2 pos, WeaponId weapon, int ammo) {
     l.pos = pos;
     l.weapon = weapon;
     l.ammo = std::max(ammo, weaponDef(weapon).mag);
+    l.medkit = false;
+}
+
+int World::countMedkits() const {
+    int n = 0;
+    for (const auto& l : loot_) {
+        if (l.active && l.medkit) {
+            ++n;
+        }
+    }
+    return n;
+}
+
+void World::spawnMedkit() {
+    const int cap = map_.width() >= 200 ? 5 : (map_.width() >= 100 ? 4 : 3);
+    if (countMedkits() >= cap) {
+        return;
+    }
+    int slot = -1;
+    for (int i = 0; i < static_cast<int>(loot_.size()); ++i) {
+        if (!loot_[static_cast<size_t>(i)].active) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < 0) {
+        return;
+    }
+    for (int t = 0; t < 40; ++t) {
+        const int tx = 2 + irand(std::max(1, map_.width() - 4));
+        const int ty = 2 + irand(std::max(1, map_.height() - 4));
+        if (!tileOpen(tx, ty)) {
+            continue;
+        }
+        const Vec2 p = tileCenter(tx, ty);
+        if (map_.solidWorld(p.x, p.y, 8.0f)) {
+            continue;
+        }
+        bool busy = false;
+        for (const auto& a : actors_) {
+            if (a.active && a.alive && (a.pos - p).length2() < 80.0f * 80.0f) {
+                busy = true;
+                break;
+            }
+        }
+        if (busy) {
+            continue;
+        }
+        Loot& l = loot_[static_cast<size_t>(slot)];
+        l.active = true;
+        l.medkit = true;
+        l.pos = p;
+        l.ammo = 50;
+        return;
+    }
 }
 
 void World::applyLoot(Actor& a, Loot& loot) {
     if (!loot.active || !a.alive) {
         return;
     }
+    if (loot.medkit) {
+        if (a.hp >= 100) {
+            return;
+        }
+        a.hp = std::min(100, a.hp + std::max(25, loot.ammo));
+        loot.active = false;
+        return;
+    }
     const WeaponDef& w = weaponDef(loot.weapon);
     const int give = std::max(w.mag, loot.ammo);
-    if (a.weapon == loot.weapon) {
-        a.reserve += give;
-    } else {
-        a.weapon = loot.weapon;
-        a.mag = w.mag;
-        a.reserve += give;
+    const int gi = grenadeIndex(loot.weapon);
+    if (gi >= 0) {
+        a.nadeStock[gi] = std::min(9, a.nadeStock[gi] + 1);
+        if (a.hudSlot == 3 + gi) {
+            a.mag = a.nadeStock[gi];
+        }
+        if (careerNades_ && a.id == localId_) {
+            careerNades_[gi] = a.nadeStock[gi];
+        }
+        loot.active = false;
+        return;
     }
-    a.reserve = std::min(a.reserve, w.reserve * 4);
+    storeSlot(a);
+    int slot = a.hudSlot < 3 ? a.hudSlot : 0;
+    if (a.loadout[slot] == loot.weapon) {
+        a.loadoutReserve[slot] = std::min(w.reserve * 4, a.loadoutReserve[slot] + give);
+    } else {
+        a.loadout[slot] = loot.weapon;
+        a.loadoutMag[slot] = w.mag;
+        a.loadoutReserve[slot] = std::min(w.reserve * 4, give);
+    }
+    equipSlot(a, slot);
     loot.active = false;
 }
 
-void World::updateLoot() {
+void World::updateLoot(float dt) {
+    medkitT_ -= dt;
+    if (medkitT_ <= 0.0f) {
+        spawnMedkit();
+        medkitT_ = 12.0f + static_cast<float>(irand(8));
+    }
     for (auto& a : actors_) {
         if (!a.active || !a.alive || a.bot || a.zombie) {
             continue;
@@ -959,16 +1162,24 @@ void World::respawn(Actor& a) {
     a.botFail = 0;
     a.botSteer = {std::cos(a.angle), std::sin(a.angle)};
     a.hp = a.bot ? static_cast<int>(tune(difficulty_).botHp) : 100;
-    const WeaponDef& w = weaponDef(a.weapon);
-    if (a.mag <= 0) {
-        a.mag = w.mag;
+    for (int i = 0; i < 3; ++i) {
+        a.loadout[i] = a.startLoadout[i];
+        const WeaponDef& w = weaponDef(a.loadout[i]);
+        a.loadoutMag[i] = w.mag;
+        a.loadoutReserve[i] = w.reserve;
     }
+    a.hudSlot = 0;
+    a.weapon = a.loadout[0];
+    a.mag = a.loadoutMag[0];
+    a.reserve = a.loadoutReserve[0];
+    a.reloadT = 0.0f;
 }
 
 void World::applyAnalog(Actor& a, float ax, float ay, float dt, bool faceMove) {
     const Vec2 stick{ax, ay};
     const float mag = clamp(stick.length(), 0.0f, 1.0f);
-    const float speedMul = a.bot ? tune(difficulty_).botSpeed * (a.zombie ? 0.70f + wave_ * 0.015f : 1.0f) : 1.0f;
+    const float speedMul = (a.bot ? tune(difficulty_).botSpeed * (a.zombie ? 0.70f + wave_ * 0.015f : 1.0f) : 1.0f) *
+                           a.speedMul;
     if (mag > 0.08f) {
         const Vec2 dir = stick.normalized();
         if (faceMove) {
@@ -1335,7 +1546,7 @@ void World::tryFire(Actor& a, Camera* cam) {
             if (d.length() < reach) {
                 const float facing = std::cos(a.angle) * d.x + std::sin(a.angle) * d.y;
                 if (facing > 0.0f) {
-                    o.hp -= static_cast<int>(w.damage);
+                    o.hp -= static_cast<int>(mitigate(o, w.damage));
                     if (o.hp <= 0) {
                         killActor(o);
                         a.kills++;
@@ -1358,14 +1569,27 @@ void World::tryFire(Actor& a, Camera* cam) {
         }
         return;
     }
-    if (a.mag <= 0) {
-        if (a.reserve > 0) {
-            a.reloadT = w.reload;
+    if (w.kind == GunKind::Grenade) {
+        const int gi = grenadeIndex(a.weapon);
+        if (gi < 0 || a.nadeStock[gi] <= 0) {
+            return;
         }
-        return;
+        a.nadeStock[gi]--;
+        a.mag = a.nadeStock[gi];
+        a.reserve = 0;
+        if (careerNades_ && a.id == localId_) {
+            careerNades_[gi] = a.nadeStock[gi];
+        }
+    } else {
+        if (a.mag <= 0) {
+            if (a.reserve > 0 && !weaponIsGrenade(a.weapon)) {
+                a.reloadT = w.reload;
+            }
+            return;
+        }
+        a.mag -= 1;
     }
-    a.mag -= 1;
-    a.cooldown = weaponCooldown(w) * (a.bot ? tune(difficulty_).shotDelay : 1.0f);
+    a.cooldown = w.kind == GunKind::Grenade ? 0.0f : weaponCooldown(w) * (a.bot ? tune(difficulty_).shotDelay : 1.0f);
     a.muzzleT = w.kind == GunKind::Grenade ? 0.18f : 0.07f;
     a.radarT = kRadarPing;
     if (cam && a.id == localId_ && w.kind != GunKind::Grenade) {
@@ -1408,7 +1632,7 @@ void World::tryFire(Actor& a, Camera* cam) {
             b->pos = hold + dir * 16.0f;
             b->vel = dir * w.bulletSpeed;
             b->life = w.range / w.bulletSpeed;
-            b->damage = w.damage * (a.bot ? tune(difficulty_).botDmgMul : 1.0f);
+            b->damage = rarityDamage(a.weapon) * (a.bot ? tune(difficulty_).botDmgMul : 1.0f);
         }
     }
 }
@@ -1569,6 +1793,9 @@ void World::hurtBase(Team victim, float dmg, int owner) {
         std::snprintf(banner_, sizeof(banner_), "BASE %s DESTROYED", letter);
     }
     bannerT_ = 4.5f;
+    if (owner == localId_) {
+        localBases_++;
+    }
 }
 
 bool World::hitBases(Vec2 pos, float dmg, int owner, Team ownerTeam) {
@@ -1662,10 +1889,7 @@ void World::explodeNuclear(NukeBlock& n, int owner, Camera* cam) {
         } else if (distance > 180.0f) {
             continue;
         }
-        float dmg = (40.0f / distance) * dmgBase;
-        if (a.id == localId_) {
-            dmg *= tune(difficulty_).incomingMul;
-        }
+        float dmg = mitigate(a, (40.0f / distance) * dmgBase);
         a.hp -= static_cast<int>(dmg);
         spawnParticle(particles_, a.pos, {}, {180, 30, 30, 255}, 0.28f, 4.0f);
         if (a.hp <= 0) {
@@ -2117,7 +2341,11 @@ void World::updateBots(float dt) {
                 tryFire(a, nullptr);
             }
         } else if (a.mag <= 0 && a.reloadT <= 0.0f && !a.zombie) {
-            a.reloadT = weaponDef(a.weapon).reload;
+            if (a.reserve > 0 && !weaponIsGrenade(a.weapon)) {
+                a.reloadT = weaponDef(a.weapon).reload;
+            } else {
+                cycleHud(a, 1);
+            }
         }
     }
 }
@@ -2302,10 +2530,7 @@ void World::explodeGrenade(Bullet& nade, Camera* cam) {
             } else if (distance > 200.0f) {
                 continue;
             }
-            float dmg = (40.0f / distance) * dmgBase;
-            if (a.id == localId_) {
-                dmg *= tune(difficulty_).incomingMul;
-            }
+            float dmg = mitigate(a, (40.0f / distance) * dmgBase);
             a.hp -= static_cast<int>(dmg);
             spawnParticle(particles_, a.pos, {}, {180, 30, 30, 255}, 0.28f, 4.0f);
             emitBurst(a.pos, 5, 50.0f, {160, 20, 20, 255}, 0.25f, 3.0f);
@@ -2430,10 +2655,7 @@ void World::updateBullets(float dt, Camera* cam) {
                 continue;
             }
             if ((a.pos - b.pos).length2() <= kPlayerRadius * kPlayerRadius * 1.6f) {
-                float dmg = b.damage;
-                if (a.id == localId_) {
-                    dmg *= tune(difficulty_).incomingMul;
-                }
+                float dmg = mitigate(a, b.damage);
                 a.hp -= static_cast<int>(dmg);
                 b.active = false;
                 spawnParticle(particles_, a.pos, b.vel * 0.05f, {180, 30, 30, 255}, 0.25f, 3.0f);
@@ -2488,13 +2710,27 @@ void World::update(float dt, Input& input, Camera& cam, NetSession* net) {
             a.reloadT -= dt;
             if (a.reloadT <= 0.0f) {
                 const WeaponDef& w = weaponDef(a.weapon);
-                const int need = w.mag - a.mag;
-                const int got = std::min(need, a.reserve);
-                a.mag += got;
-                a.reserve -= got;
+                if (w.kind != GunKind::Grenade) {
+                    const int need = w.mag - a.mag;
+                    const int got = std::min(need, a.reserve);
+                    a.mag += got;
+                    a.reserve -= got;
+                    if (a.hudSlot >= 0 && a.hudSlot < 3) {
+                        a.loadoutMag[a.hudSlot] = a.mag;
+                        a.loadoutReserve[a.hudSlot] = a.reserve;
+                    }
+                } else {
+                    a.reloadT = 0.0f;
+                }
             }
         }
         if (!a.alive) {
+            if (mode_ == GameMode::Zombie && a.id == localId_) {
+                matchOver_ = true;
+                winnerId_ = -1;
+                paused_ = true;
+                continue;
+            }
             if (mode_ == GameMode::LastSurvivor || mode_ == GameMode::SoloVsAll) {
                 continue;
             }
@@ -2514,26 +2750,22 @@ void World::update(float dt, Input& input, Camera& cam, NetSession* net) {
 
     Actor* me = local();
     if (me && me->alive) {
-        applyAnalog(*me, input.analogX(), input.analogY(), dt);
-        moveActor(*me, dt);
-        if (input.lShoulder()) {
-            int w = static_cast<int>(me->weapon) - 1;
-            if (w < 0) {
-                w = static_cast<int>(WeaponId::Count) - 1;
+        applyAnalog(*me, input.moveX(), input.moveY(), dt, input.scheme() != ControlScheme::Dpad);
+        if (input.scheme() == ControlScheme::Dpad) {
+            const float rot = input.rotateAxis();
+            if (std::fabs(rot) > 0.1f) {
+                me->angle += rot * 2.4f * dt;
             }
-            me->weapon = static_cast<WeaponId>(w);
-            const WeaponDef& def = weaponDef(me->weapon);
-            me->mag = def.mag;
-            me->reserve = def.reserve;
         }
-        if (input.cycleWeapon() || input.pressed(SDL_CONTROLLER_BUTTON_Y)) {
-            int w = (static_cast<int>(me->weapon) + 1) % static_cast<int>(WeaponId::Count);
-            me->weapon = static_cast<WeaponId>(w);
-            const WeaponDef& def = weaponDef(me->weapon);
-            me->mag = def.mag;
-            me->reserve = def.reserve;
+        moveActor(*me, dt);
+        if (input.prevWeapon()) {
+            cycleHud(*me, -1);
         }
-        if (input.reload() && me->reloadT <= 0.0f && me->mag < weaponDef(me->weapon).mag) {
+        if (input.nextWeapon() || input.cycleWeapon()) {
+            cycleHud(*me, 1);
+        }
+        if (input.reload() && me->reloadT <= 0.0f && !weaponIsGrenade(me->weapon) &&
+            me->mag < weaponDef(me->weapon).mag) {
             me->reloadT = weaponDef(me->weapon).reload;
         }
         const WeaponDef& w = weaponDef(me->weapon);
@@ -2553,7 +2785,7 @@ void World::update(float dt, Input& input, Camera& cam, NetSession* net) {
     if (!net || net->role() != NetRole::Client) {
         updateBots(dt);
         updateBullets(dt, &cam);
-        updateLoot();
+        updateLoot(dt);
         updateWaves(dt);
         checkWinner();
     }
@@ -2627,6 +2859,12 @@ void World::update(float dt, Input& input, Camera& cam, NetSession* net) {
             if (in.id < kMaxPlayers && actors_[in.id].active && !actors_[in.id].bot) {
                 Actor& a = actors_[in.id];
                 applyAnalog(a, in.ax / 127.0f, in.ay / 127.0f, dt);
+                if (in.buttons & 8) {
+                    a.angle -= 2.4f * dt;
+                }
+                if (in.buttons & 16) {
+                    a.angle += 2.4f * dt;
+                }
                 moveActor(a, dt);
                 a.weapon = static_cast<WeaponId>(in.weapon % static_cast<uint8_t>(WeaponId::Count));
                 if (in.buttons & NetSession::kBtnFire) {
@@ -2640,8 +2878,8 @@ void World::update(float dt, Input& input, Camera& cam, NetSession* net) {
     } else if (net && net->role() == NetRole::Client) {
         NetInput in{};
         in.id = static_cast<uint8_t>(localId_);
-        in.ax = static_cast<int8_t>(clamp(input.analogX(), -1.0f, 1.0f) * 127.0f);
-        in.ay = static_cast<int8_t>(clamp(input.analogY(), -1.0f, 1.0f) * 127.0f);
+        in.ax = static_cast<int8_t>(clamp(input.moveX(), -1.0f, 1.0f) * 127.0f);
+        in.ay = static_cast<int8_t>(clamp(input.moveY(), -1.0f, 1.0f) * 127.0f);
         if (input.fireHeld() || input.down(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) {
             in.buttons |= NetSession::kBtnFire;
         }
@@ -2808,6 +3046,22 @@ void World::render(SDL_Renderer* r, Assets& assets, Camera& cam) {
                       {20, 18, 14, 255}, false);
     }
 
+    for (auto& l : loot_) {
+        if (!l.active) {
+            continue;
+        }
+        if (!cam.onScreen(l.pos.x - 16.0f, l.pos.y - 16.0f, 32.0f, 32.0f)) {
+            continue;
+        }
+        const Vec2 p = cam.toScreen(l.pos.x, l.pos.y);
+        const float bob = std::sin(static_cast<float>(tick_) * 0.12f) * 1.5f * z;
+        if (l.medkit) {
+            assets.drawCentered(r, "cs_medkit", p.x, p.y + bob, 0.0f, 0.85f * z);
+        } else {
+            assets.drawCentered(r, weaponGroundSprite(l.weapon), p.x, p.y + bob, 0.0f, 1.0f * z);
+        }
+    }
+
     for (auto& b : bullets_) {
         if (!b.active) {
             continue;
@@ -2850,18 +3104,6 @@ void World::render(SDL_Renderer* r, Assets& assets, Camera& cam) {
             bg.w = std::max(1, static_cast<int>(a.hp * 24 * z / 100));
             SDL_RenderFillRect(r, &bg);
         }
-    }
-
-    for (auto& l : loot_) {
-        if (!l.active) {
-            continue;
-        }
-        if (!cam.onScreen(l.pos.x - 16.0f, l.pos.y - 16.0f, 32.0f, 32.0f)) {
-            continue;
-        }
-        const Vec2 p = cam.toScreen(l.pos.x, l.pos.y);
-        const float bob = std::sin(static_cast<float>(tick_) * 0.12f) * 2.0f * z;
-        assets.drawCentered(r, weaponGroundSprite(l.weapon), p.x, p.y + bob, 0.0f, 1.0f * z);
     }
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
@@ -2925,21 +3167,36 @@ void World::renderHud(SDL_Renderer* r, Assets& assets) {
 
     const WeaponDef& w = weaponDef(me->weapon);
     const SDL_Color hud{240, 230, 180, 255};
-    assets.drawText(r, "HP", 8, kScreenH - 22, hud, false);
-    assets.drawInt(r, me->hp, 26, kScreenH - 22, hud, false);
-    assets.drawText(r, w.name, 64, kScreenH - 22, hud, false);
-    int ax = 64 + assets.textWidth(w.name, false) + 8;
-    if (!w.melee) {
-        assets.drawInt(r, me->mag, ax, kScreenH - 22, hud, false);
-        assets.drawInt(r, me->reserve, ax + 28, kScreenH - 22, hud, false);
-        ax += 56;
+    assets.drawText(r, "HP", 8, kScreenH - 26, hud, false);
+    assets.drawInt(r, me->hp, 26, kScreenH - 26, hud, false);
+    if (!w.melee && w.kind != GunKind::Grenade) {
+        assets.drawInt(r, me->mag, 58, kScreenH - 26, hud, false);
+        assets.drawInt(r, me->reserve, 86, kScreenH - 26, hud, false);
     }
-    assets.drawText(r, "K", ax, kScreenH - 22, hud, false);
-    assets.drawInt(r, me->kills, ax + 12, kScreenH - 22, hud, false);
-    assets.drawText(r, "D", ax + 40, kScreenH - 22, hud, false);
-    assets.drawInt(r, me->deaths, ax + 52, kScreenH - 22, hud, false);
-    assets.drawHotspot(r, weaponGroundSprite(me->weapon), static_cast<float>(kScreenW - 22),
-                       static_cast<float>(kScreenH - 14), -90.0f, 1.0f, 16.0f, 16.0f, false);
+    assets.drawText(r, "K", 118, kScreenH - 26, hud, false);
+    assets.drawInt(r, me->kills, 130, kScreenH - 26, hud, false);
+    assets.drawText(r, "D", 158, kScreenH - 26, hud, false);
+    assets.drawInt(r, me->deaths, 170, kScreenH - 26, hud, false);
+
+    const int slotW = 28;
+    const int baseX = 200;
+    const int baseY = kScreenH - 26;
+    for (int i = 0; i < 6; ++i) {
+        const int x = baseX + i * slotW;
+        SDL_SetRenderDrawColor(r, 20, 22, 18, 200);
+        SDL_Rect cell{x, baseY - 2, 26, 24};
+        SDL_RenderFillRect(r, &cell);
+        if (i == me->hudSlot) {
+            SDL_SetRenderDrawColor(r, 255, 220, 70, 255);
+            SDL_RenderDrawRect(r, &cell);
+        }
+        WeaponId id = i < 3 ? me->loadout[i] : grenadeFromIndex(i - 3);
+        assets.drawHotspot(r, weaponGroundSprite(id), static_cast<float>(x + 13), static_cast<float>(baseY + 10),
+                           0.0f, 0.72f, 16.0f, 16.0f, false);
+        if (i >= 3) {
+            assets.drawInt(r, me->nadeStock[i - 3], x + 16, baseY + 10, {255, 240, 180, 255}, false);
+        }
+    }
 
     if (mode_ == GameMode::Zombie) {
         SDL_SetRenderDrawColor(r, 0, 0, 0, 170);

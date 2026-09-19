@@ -96,6 +96,8 @@ bool GameMap::load(const std::string& path) {
             in >> theme_;
         } else if (key == "size") {
             in >> sizeName_;
+        } else if (key == "unlock") {
+            in >> unlockLevel_;
         } else if (key == "w") {
             in >> w_;
         } else if (key == "h") {
@@ -130,8 +132,8 @@ bool GameMap::save(const std::string& path) const {
     if (!f) {
         return false;
     }
-    if (std::fprintf(f, "CSPSP 1\nname %s\ntheme %s\nsize %s\nw %d\nh %d\n", name_.c_str(), theme_.c_str(),
-                     sizeName_.c_str(), w_, h_) < 0) {
+    if (std::fprintf(f, "CSPSP 1\nname %s\ntheme %s\nsize %s\nunlock %d\nw %d\nh %d\n", name_.c_str(), theme_.c_str(),
+                     sizeName_.c_str(), unlockLevel_, w_, h_) < 0) {
         std::fclose(f);
         return false;
     }
@@ -457,6 +459,13 @@ std::vector<MapEntry> GameMap::loadIndex(const std::string& mapsDir) {
             std::getline(ts, e.size, '\t');
             std::getline(ts, e.theme, '\t');
             std::getline(ts, e.name);
+        }
+        GameMap tmp;
+        if (tmp.load(joinPath(mapsDir, e.file))) {
+            e.unlockLevel = tmp.unlockLevel();
+            if (e.name.empty()) {
+                e.name = tmp.name();
+            }
         }
         entries.push_back(e);
     }

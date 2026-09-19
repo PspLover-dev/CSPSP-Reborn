@@ -2,6 +2,7 @@ CSPSP 1
 name Dodgeball
 theme vertigo
 size small
+unlock 4
 w 50
 h 50
 ##################################################

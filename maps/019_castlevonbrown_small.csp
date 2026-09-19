@@ -2,6 +2,7 @@ CSPSP 1
 name Castle
 theme italy
 size small
+unlock 7
 w 50
 h 50
 ##################################################
